@@ -1,0 +1,22 @@
+#ifndef BOT_MEDIUM_H
+#define BOT_MEDIUM_H
+
+#include "ibot_strategy.h"
+#include "rules.h"
+
+class MediumBotStrategy : public IBotStrategy
+{
+public:
+    int pickCard(player * self, const card & current,
+                 int direction, int selfIdx,
+                 const int * opponentSizes, int opponentCount,
+                 int drawStack) override;
+
+    COLOR pickColor(player * self) override;
+
+    bool shouldJumpIn(player * self, const card & target) override;
+
+    IBotStrategy * clone() const override;
+};
+
+#endif

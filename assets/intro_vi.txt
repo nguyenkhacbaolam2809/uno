@@ -1,0 +1,18 @@
+
+Day la phien ban C++ cua game bai Uno.
+Nguoi tao: Com L. (Mua he 2015)
+Cai tien boi: them nhieu che do choi, Bot thong minh, luat Viet Nam.
+
+Che do choi:
+  1. Choi don (vs Bot) - 3 do kho: De, Binh thuong, Kho
+  2. Nhieu nguoi cung may - 2-5 nguoi
+  3. Hon hop (Nguoi + Bot)
+  4. Choi LAN
+
+Luat Viet Nam (tu chon):
+  - Chong bai +2 va +4
+  - Luat so 0: chuyen bai cho nhau
+  - Luat so 7: doi bai voi nguoi khac
+  - Ho "Uno" khi sap het bai
+
+Chuc ban choi game vui ve :)

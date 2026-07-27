@@ -1,0 +1,18 @@
+
+This is a C++ version of the Uno card game.
+Creator: Com L. (Summer 2015)
+Enhanced with multiple game modes, smart Bot AI, Vietnamese rules.
+
+Game modes:
+  1. Single Player (vs Bot) - 3 difficulties: Easy, Normal, Hard
+  2. Local Multiplayer - 2-5 players
+  3. Mixed (Human + Bot)
+  4. LAN Multiplayer
+
+Vietnamese rules (optional):
+  - Stack +2 and +4 cards
+  - 0 rule: pass hands around
+  - 7 rule: swap hands with a player
+  - Declare "Uno" when down to 1 card
+
+Have fun playing the game :)
