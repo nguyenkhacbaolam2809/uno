@@ -57,7 +57,10 @@ void GameEngine::init(int numPlayers)
     players = new player[numPlayers];
     botStrategies = new IBotStrategy*[numPlayers];
     for (int i = 0; i < numPlayers; i++)
+    {
         botStrategies[i] = nullptr;
+        players[i].setName("");
+    }
 
     playerCount = numPlayers;
     state.playerCount = numPlayers;
@@ -94,20 +97,22 @@ void GameEngine::dealCards()
 
 void GameEngine::chooseRandomStarter()
 {
-    srand(time(NULL));
-
-    while (true)
+    int maxAttempts = playerCount * 10;
+    while (maxAttempts > 0)
     {
         card c = mainDeck.draw();
         if (c.color != wild)
         {
             state.currentCard = c;
-            break;
+            state.turn = rand() % playerCount;
+            return;
         }
         discardPile.add_card(c);
+        maxAttempts--;
     }
 
-    state.turn = rand() % playerCount;
+    state.currentCard = mainDeck.draw();
+    state.turn = 0;
 }
 
 void GameEngine::start()
@@ -251,7 +256,16 @@ void GameEngine::drawCard(int playerIdx)
 void GameEngine::reshuffleDiscard()
 {
     int n = discardPile.get_size();
-    if (n <= 1) return;
+    if (n <= 1)
+    {
+        if (mainDeck.get_size() == 0 && n > 0)
+        {
+            card c = discardPile.draw();
+            discardPile.add_card(c);
+            mainDeck.add_card(c);
+        }
+        return;
+    }
 
     card * tmp = new card[n];
     for (int i = 0; i < n; i++)
@@ -321,16 +335,17 @@ void GameEngine::applyActionCard(const card & c)
 {
     if (c.number == 11)
     {
-        state.turn += state.direction * 2;
+        state.turn += state.direction;
     }
     else if (c.number == 12)
     {
         if (playerCount == 2)
-            state.turn += state.direction * 2;
+        {
+            state.turn += state.direction;
+        }
         else
         {
             state.direction = -state.direction;
-            state.turn += state.direction;
         }
     }
 }
@@ -346,11 +361,9 @@ void GameEngine::nextTurn()
     }
 
     state.jumpState = JUMP_NONE;
-    state.turn += state.direction;
-
+    state.turn = (state.turn + state.direction) % playerCount;
     if (state.turn < 0)
-        state.turn += playerCount * 100;
-    state.turn %= playerCount;
+        state.turn += playerCount;
 }
 
 BotActionResult GameEngine::executeBotTurn(int playerIdx)

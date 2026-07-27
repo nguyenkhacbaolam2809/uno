@@ -150,26 +150,22 @@ void deck::shuffle()
 	}
 
 
-	int temp_size = size; 
-	int temp_pos; 
-	int pos; 
-	for (int i = 0 ; i <size; i++ ) 
+	int temp_size = size;
+	int temp_pos;
+	int pos;
+	for (int i = 0; i < size; i++)
 	{
-		// randomly find a position in temp_deck
-		srand(time(NULL)); // change the seed , so randomized number is different each time
-		pos = rand() % temp_size; 
-		//assign random element to deck[i]
-		ptr_deck[i] = temp_deck[pos]; 
-				
-		// removing element from temp_deck (O(n) to shift) 
-		temp_size--; 
-		for (temp_pos = pos ; temp_pos < temp_size ; temp_pos++) 
+		pos = rand() % temp_size;
+		ptr_deck[i] = temp_deck[pos];
+
+		temp_size--;
+		for (temp_pos = pos; temp_pos < temp_size; temp_pos++)
 		{
-			temp_deck[temp_pos] = temp_deck[temp_pos+1];
+			temp_deck[temp_pos] = temp_deck[temp_pos + 1];
 		}
 	}
-	
-	delete [] temp_deck; 
+
+	delete[] temp_deck;
 	
 
 
@@ -212,20 +208,16 @@ void deck::quick_shuffle()
 	now consider array from 0 to n-2(size reduced by 1 ) 
 	repeat the process until we hit first element 
 */ 
-	int pos; 
-	int temp_size = size-1; 
-	card temp_card; 
-	while(temp_size > 0 )
+	int pos;
+	int temp_size = size;
+	card temp_card;
+	while (temp_size > 0)
 	{
-		//generate random
-		srand(time(NULL)); // change the seed , so randomized number is different each time
-		pos = rand() % temp_size;
-		// swap elements 
-		temp_card = ptr_deck[temp_size]; 
-		ptr_deck[temp_size] = ptr_deck[pos]; 
-		ptr_deck[pos] = temp_card; 
-		// reduce size by 1 
-		temp_size--; 
+		temp_size--;
+		pos = rand() % (temp_size + 1);
+		temp_card = ptr_deck[temp_size];
+		ptr_deck[temp_size] = ptr_deck[pos];
+		ptr_deck[pos] = temp_card;
 	}
 
 }

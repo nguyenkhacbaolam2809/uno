@@ -18,6 +18,7 @@ ConsoleUI::~ConsoleUI()
 void ConsoleUI::waitForEnter()
 {
     cout << msg(config, 43);
+    cin.clear();
     cin.ignore(numeric_limits<streamsize>::max(), '\n');
     cin.get();
 }
@@ -90,6 +91,13 @@ int ConsoleUI::pickCardFromHand(player & p, const card & current, bool forceDraw
 
         int idx;
         cin >> idx;
+        if (cin.fail())
+        {
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            cout << msg(config, 22) << endl;
+            continue;
+        }
 
         if (idx == -1)
             return -1;
@@ -114,6 +122,12 @@ string ConsoleUI::pickColor()
     {
         cout << msg(config, 19);
         cin >> str;
+        if (cin.fail())
+        {
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            continue;
+        }
         if (str == "do" || str == "red") return str;
         if (str == "xanh la" || str == "green") return str;
         if (str == "xanh duong" || str == "blue") return str;
@@ -147,6 +161,7 @@ void ConsoleUI::handleHumanTurn(GameEngine & engine, int playerIdx)
         if (canStack)
         {
             int idx = pickCardFromHand(*p, currentCard, true);
+            if (idx == -1) return;
             card chosen = p->peek(idx);
             if (isStackCard(chosen) && canPlayCard(chosen, currentCard))
             {
@@ -598,6 +613,12 @@ void ConsoleUI::run()
         showMainMenu();
         int choice;
         cin >> choice;
+        if (cin.fail())
+        {
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            choice = -1;
+        }
 
         switch (choice)
         {

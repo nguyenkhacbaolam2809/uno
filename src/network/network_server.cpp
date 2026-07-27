@@ -7,6 +7,7 @@
 using namespace std;
 
 CRITICAL_SECTION NetworkServer::clientsLock;
+bool NetworkServer::csInitialized = false;
 
 struct ThreadParam
 {
@@ -79,7 +80,11 @@ bool NetworkServer::start(int port)
     }
 
     running = true;
-    InitializeCriticalSection(&clientsLock);
+    if (!csInitialized)
+    {
+        InitializeCriticalSection(&clientsLock);
+        csInitialized = true;
+    }
     cout << msg(config, 53) << port << endl;
     return true;
 }
@@ -103,7 +108,11 @@ void NetworkServer::stop()
         listenSocket = INVALID_SOCKET;
     }
 
-    DeleteCriticalSection(&clientsLock);
+    if (csInitialized)
+    {
+        DeleteCriticalSection(&clientsLock);
+        csInitialized = false;
+    }
     cleanupWinsock();
 }
 
@@ -134,11 +143,16 @@ bool NetworkServer::waitForPlayers(int expectedPlayers)
                 param->server = this;
                 param->clientIdx = i;
                 HANDLE hThread = CreateThread(NULL, 0, clientThreadStatic, param, 0, NULL);
-                if (hThread) CloseHandle(hThread);
+                if (hThread)
+                {
+                    CloseHandle(hThread);
+                }
+                else
+                {
+                    delete param;
+                }
 
-                char clientIP[INET_ADDRSTRLEN];
-                inet_ntop(AF_INET, &clientAddr.sin_addr, clientIP, INET_ADDRSTRLEN);
-                cout << "Player " << clientCount << " connected (" << clientIP << ")" << endl;
+                cout << "Player " << clientCount << " connected" << endl;
                 break;
             }
         }
@@ -158,11 +172,11 @@ DWORD WINAPI NetworkServer::clientThreadStatic(LPVOID param)
 
 DWORD NetworkServer::clientReceiveThread(int clientIdx)
 {
-    char buffer[BUFFER_SIZE];
+    char headerBuf[sizeof(PacketHeader)];
 
     while (running)
     {
-        int bytes = recv(clientSockets[clientIdx], buffer, sizeof(PacketHeader), 0);
+        int bytes = recv(clientSockets[clientIdx], headerBuf, sizeof(PacketHeader), 0);
         if (bytes <= 0)
         {
             if (running)
@@ -174,27 +188,48 @@ DWORD NetworkServer::clientReceiveThread(int clientIdx)
             break;
         }
 
-        PacketHeader * header = (PacketHeader *)buffer;
+        PacketHeader * header = (PacketHeader *)headerBuf;
+
+        if (header->bodyLen > BUFFER_SIZE - sizeof(PacketHeader))
+        {
+            EnterCriticalSection(&clientsLock);
+            removeClient(clientIdx);
+            LeaveCriticalSection(&clientsLock);
+            break;
+        }
+
         int totalSize = sizeof(PacketHeader) + header->bodyLen;
+        char * bodyBuf = new char[header->bodyLen + 1];
 
         while (bytes < totalSize)
         {
-            int more = recv(clientSockets[clientIdx], buffer + bytes, totalSize - bytes, 0);
+            int more = recv(clientSockets[clientIdx], bodyBuf + bytes - sizeof(PacketHeader),
+                            totalSize - bytes, 0);
             if (more <= 0) break;
             bytes += more;
         }
 
-        if (bytes < totalSize) break;
+        if (bytes < totalSize)
+        {
+            delete[] bodyBuf;
+            break;
+        }
 
         switch (header->type)
         {
             case PKT_PLAY_CARD:
             {
-                PacketPlayCard * pkt = (PacketPlayCard *)(buffer + sizeof(PacketHeader));
-                string colorNames[] = {"", "do", "xanh la", "xanh duong", "vang"};
-                string chosenCol = colorNames[pkt->chosenColor];
-                engine.playCard(header->playerId, pkt->cardIndex, chosenCol);
-                broadcastSyncState();
+                if (header->bodyLen >= sizeof(PacketPlayCard))
+                {
+                    PacketPlayCard * pkt = (PacketPlayCard *)bodyBuf;
+                    if (pkt->chosenColor <= 4)
+                    {
+                        string colorNames[] = {"", "do", "xanh la", "xanh duong", "vang"};
+                        string chosenCol = colorNames[pkt->chosenColor];
+                        engine.playCard(header->playerId, pkt->cardIndex, chosenCol);
+                        broadcastSyncState();
+                    }
+                }
                 break;
             }
             case PKT_DRAW:
@@ -205,9 +240,12 @@ DWORD NetworkServer::clientReceiveThread(int clientIdx)
             }
             case PKT_JUMP_IN:
             {
-                PacketJumpIn * pkt = (PacketJumpIn *)(buffer + sizeof(PacketHeader));
-                engine.jumpIn(header->playerId, pkt->cardIndex);
-                broadcastSyncState();
+                if (header->bodyLen >= sizeof(PacketJumpIn))
+                {
+                    PacketJumpIn * pkt = (PacketJumpIn *)bodyBuf;
+                    engine.jumpIn(header->playerId, pkt->cardIndex);
+                    broadcastSyncState();
+                }
                 break;
             }
             case PKT_CALL_UNO:
@@ -217,14 +255,19 @@ DWORD NetworkServer::clientReceiveThread(int clientIdx)
             }
             case PKT_CATCH_UNO:
             {
-                PacketUno * pkt = (PacketUno *)(buffer + sizeof(PacketHeader));
-                engine.catchUno(header->playerId, pkt->targetId);
-                broadcastSyncState();
+                if (header->bodyLen >= sizeof(PacketUno))
+                {
+                    PacketUno * pkt = (PacketUno *)bodyBuf;
+                    engine.catchUno(header->playerId, pkt->targetId);
+                    broadcastSyncState();
+                }
                 break;
             }
             default:
                 break;
         }
+
+        delete[] bodyBuf;
 
         if (engine.isGameOver())
         {
@@ -260,81 +303,6 @@ bool NetworkServer::sendPacket(SOCKET sock, const void * data, int len)
     return true;
 }
 
-bool NetworkServer::broadcastPacket(const void * data, int len, SOCKET exclude)
-{
-    EnterCriticalSection(&clientsLock);
-    for (int i = 0; i < MAX_CLIENTS; i++)
-    {
-        if (clientSockets[i] != INVALID_SOCKET && clientSockets[i] != exclude)
-            sendPacket(clientSockets[i], data, len);
-    }
-    LeaveCriticalSection(&clientsLock);
-    return true;
-}
-
-bool NetworkServer::sendSyncState(SOCKET sock)
-{
-    GameState gs = engine.getState();
-    gs.vietRules = vietRules;
-
-    int playerDataSize = 0;
-    for (int i = 0; i < engine.getPlayerCount(); i++)
-    {
-        const player * p = engine.getPlayer(i);
-        playerDataSize += sizeof(int) + (int)p->getName().length() + sizeof(int) + sizeof(int) + sizeof(int);
-        for (int j = 0; j < p->get_size(); j++)
-            playerDataSize += sizeof(card);
-    }
-
-    int totalSize = sizeof(PacketHeader) + sizeof(GameState) + sizeof(int) + playerDataSize;
-    char * buffer = new char[totalSize];
-
-    PacketHeader * header = (PacketHeader *)buffer;
-    header->type = PKT_SYNC_STATE;
-    header->playerId = 0;
-    header->bodyLen = totalSize - sizeof(PacketHeader);
-
-    int offset = sizeof(PacketHeader);
-    memcpy(buffer + offset, &gs, sizeof(GameState));
-    offset += sizeof(GameState);
-
-    int pCount = engine.getPlayerCount();
-    memcpy(buffer + offset, &pCount, sizeof(int));
-    offset += sizeof(int);
-
-    for (int i = 0; i < pCount; i++)
-    {
-        const player * p = engine.getPlayer(i);
-        string name = p->getName();
-        int nameLen = (int)name.length();
-        int cardCount = p->get_size();
-        int pType = (int)p->getType();
-        int pDiff = (int)p->getDifficulty();
-
-        memcpy(buffer + offset, &nameLen, sizeof(int));
-        offset += sizeof(int);
-        memcpy(buffer + offset, name.c_str(), nameLen);
-        offset += nameLen;
-        memcpy(buffer + offset, &cardCount, sizeof(int));
-        offset += sizeof(int);
-        memcpy(buffer + offset, &pType, sizeof(int));
-        offset += sizeof(int);
-        memcpy(buffer + offset, &pDiff, sizeof(int));
-        offset += sizeof(int);
-
-        for (int j = 0; j < cardCount; j++)
-        {
-            card c = p->peek(j);
-            memcpy(buffer + offset, &c, sizeof(card));
-            offset += sizeof(card);
-        }
-    }
-
-    bool result = sendPacket(sock, buffer, totalSize);
-    delete[] buffer;
-    return result;
-}
-
 void NetworkServer::broadcastSyncState()
 {
     GameState gs = engine.getState();
@@ -344,18 +312,17 @@ void NetworkServer::broadcastSyncState()
     for (int i = 0; i < engine.getPlayerCount(); i++)
     {
         const player * p = engine.getPlayer(i);
-        playerDataSize += sizeof(int) + (int)p->getName().length() + sizeof(int) + sizeof(int) + sizeof(int);
-        for (int j = 0; j < p->get_size(); j++)
-            playerDataSize += sizeof(card);
+        playerDataSize += (int)sizeof(int) + (int)p->getName().length() + (int)sizeof(int) + (int)sizeof(int) + (int)sizeof(int);
+        playerDataSize += p->get_size() * (int)sizeof(card);
     }
 
-    int totalSize = sizeof(PacketHeader) + sizeof(GameState) + sizeof(int) + playerDataSize;
+    int totalSize = (int)sizeof(PacketHeader) + (int)sizeof(GameState) + (int)sizeof(int) + playerDataSize;
     char * buffer = new char[totalSize];
 
     PacketHeader * header = (PacketHeader *)buffer;
     header->type = PKT_SYNC_STATE;
     header->playerId = 0;
-    header->bodyLen = totalSize - sizeof(PacketHeader);
+    header->bodyLen = (unsigned short)(totalSize - sizeof(PacketHeader));
 
     int offset = sizeof(PacketHeader);
     memcpy(buffer + offset, &gs, sizeof(GameState));
@@ -389,7 +356,7 @@ void NetworkServer::broadcastSyncState()
         {
             card c = p->peek(j);
             memcpy(buffer + offset, &c, sizeof(card));
-            offset += sizeof(card);
+            offset += (int)sizeof(card);
         }
     }
 
@@ -406,9 +373,19 @@ void NetworkServer::broadcastSyncState()
 
 void NetworkServer::runGameLoop()
 {
-    engine.init(MAX_CLIENTS);
-
+    EnterCriticalSection(&clientsLock);
+    int connectedPlayers = 0;
     for (int i = 0; i < MAX_CLIENTS; i++)
+    {
+        if (clientSockets[i] != INVALID_SOCKET)
+            connectedPlayers++;
+    }
+    LeaveCriticalSection(&clientsLock);
+
+    if (connectedPlayers == 0) return;
+
+    engine.init(connectedPlayers);
+    for (int i = 0; i < connectedPlayers; i++)
     {
         string pname = "Player ";
         pname += to_string(i + 1);
@@ -426,8 +403,10 @@ void NetworkServer::runGameLoop()
     if (engine.isGameOver())
     {
         broadcastSyncState();
-        cout << engine.getPlayer(engine.getWinner())->getName()
-             << msg(config, 23) << endl;
+        int winner = engine.getWinner();
+        if (winner >= 0)
+            cout << engine.getPlayer(winner)->getName()
+                 << msg(config, 23) << endl;
     }
 
     Sleep(2000);

@@ -31,12 +31,11 @@ private:
     bool running;
 
     static CRITICAL_SECTION clientsLock;
+    static bool csInitialized;
 
     bool initWinsock();
     void cleanupWinsock();
     bool sendPacket(SOCKET sock, const void * data, int len);
-    bool sendSyncState(SOCKET sock);
-    bool broadcastPacket(const void * data, int len, SOCKET exclude = INVALID_SOCKET);
     void broadcastSyncState();
     void removeClient(int idx);
     DWORD clientReceiveThread(int clientIdx);

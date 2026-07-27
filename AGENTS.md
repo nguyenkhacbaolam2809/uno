@@ -33,8 +33,24 @@
 - `console_ui.h/cpp` - Split modeLan into `modeLanServer()` (host) and `modeLanClient()` (join)
 - `Makefile` - Added network objects + `-lws2_32` for Winsock2 linking
 
-## Phase 4 - Testing & Polish (Pending)
-- Unit tests
-- Edge case handling
-- Performance optimization
-- Code cleanup
+## Phase 4 - Testing & Polish ✅
+- Comprehensive unit tests: 80 tests covering card, deck, player, rules, game engine, and bots
+- Fixed `addPlayer` bug: `init()` now creates players with empty names so `addPlayer` can replace them
+- Fixed `isLegalLastCard`: skip (11) and reverse (12) are now correctly allowed as last cards
+- Fixed `isLegalLastCard`: only draw2 (10), wild (13), wild draw4 (14) are forbidden
+- Fixed Skip/Reverse double-advance bug in `applyActionCard`
+- Fixed `nextTurn()` loop safety check
+- Fixed `chooseRandomStarter()` infinite loop protection
+- Fixed Fisher-Yates shuffle off-by-one in `quick_shuffle()`
+- Removed `srand()` from shuffle loops (seeded once in `main()`)
+- Fixed `reshuffleDiscard()` empty deck edge case
+- Fixed `peek()` bounds checking in `player.cpp`
+- Fixed `waitForEnter()` not clearing cin fail-bit
+- Fixed `pickCardFromHand()` and `pickColor()` infinite loops on non-numeric input
+- Fixed force-draw `peek(-1)` crash in `handleHumanTurn()`
+- Fixed main menu `cin` failure handling
+- Fixed `callUno()` stub implementation
+- Fixed `network_server.cpp`: stack buffer overflow, packet body validation, player slot bug, thread cleanup, critical section lifecycle, code deduplication
+- Removed old `test_legacy.cpp` (preprocessor macro based, only 1 test path compiled)
+- Added `test_all.cpp` with 80 passing tests
+- Added `test_all` target to Makefile

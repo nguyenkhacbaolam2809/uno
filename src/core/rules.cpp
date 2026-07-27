@@ -37,6 +37,6 @@ bool canJumpIn(const card & played, const card & current)
 
 bool isLegalLastCard(const card & c)
 {
-    if (c.number >= 10 && c.number <= 14) return false;
+    if (c.number == 10 || c.number == 13 || c.number == 14) return false;
     return true;
 }

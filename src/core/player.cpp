@@ -150,13 +150,11 @@ int player::get_size() const
 
 card player::peek(int pos) const
 {
-    int temp_pos = pos;
+    if (pos < 0 || pos >= size)
+        return card();
     card_elem * temp_elem = head;
-    while (temp_pos > 0)
-    {
+    for (int i = 0; i < pos; i++)
         temp_elem = temp_elem->next;
-        temp_pos--;
-    }
     return temp_elem->data;
 }
 

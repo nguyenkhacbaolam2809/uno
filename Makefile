@@ -58,6 +58,12 @@ network_client.o: $(NET)/network_client.cpp $(NET)/network_client.h $(NET)/packe
 console_ui.o: $(UI)/console_ui.cpp $(UI)/console_ui.h $(CORE)/config.h $(CORE)/game_engine.h $(NET)/network_server.h $(NET)/network_client.h
 	$(COMPILER) $(COMPILER_FLAGS) $(INCLUDE) $(UI)/console_ui.cpp
 
+test_all: test_all.o $(CORE_OBJ) $(AI_OBJ)
+	$(LINKER) test_all.o $(CORE_OBJ) $(AI_OBJ) -o test_all
+
+test_all.o: tests/test_all.cpp $(CORE)/card.h $(CORE)/deck.h $(CORE)/player.h $(CORE)/rules.h $(CORE)/game_engine.h $(CORE)/config.h
+	$(COMPILER) $(COMPILER_FLAGS) $(INCLUDE) tests/test_all.cpp
+
 clean:
 	-del /Q *.o 2>NUL
 ifneq ($(OS),Windows_NT)
