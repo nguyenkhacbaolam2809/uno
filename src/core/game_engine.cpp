@@ -5,16 +5,10 @@
 #include <ctime>
 #include <cstring>
 #include <iostream>
-using namespace std;
 
 GameEngine::GameEngine(const GameConfig & cfg, bool vietRules)
     : config(cfg), vietRules(vietRules)
 {
-    players = nullptr;
-    playerCount = 0;
-    owned = false;
-    botStrategies = nullptr;
-
     state.turn = 0;
     state.direction = 1;
     state.phase = PHASE_DEAL;
@@ -30,44 +24,33 @@ GameEngine::GameEngine(const GameConfig & cfg, bool vietRules)
 GameEngine::~GameEngine()
 {
     destroyStrategies();
-    if (owned && players)
-        delete[] players;
 }
 
 void GameEngine::destroyStrategies()
 {
-    if (botStrategies)
+    for (std::size_t i = 0; i < botStrategies.size(); i++)
     {
-        for (int i = 0; i < playerCount; i++)
-        {
-            if (botStrategies[i])
-                delete botStrategies[i];
-        }
-        delete[] botStrategies;
-        botStrategies = nullptr;
+        if (botStrategies[i])
+            delete botStrategies[i];
     }
+    botStrategies.clear();
 }
 
 void GameEngine::init(int numPlayers)
 {
     destroyStrategies();
-    if (owned && players)
-        delete[] players;
 
-    players = new player[numPlayers];
-    botStrategies = new IBotStrategy*[numPlayers];
+    players.assign(numPlayers, player());
+    botStrategies.assign(numPlayers, nullptr);
+
     for (int i = 0; i < numPlayers; i++)
-    {
-        botStrategies[i] = nullptr;
         players[i].setName("");
-    }
 
     playerCount = numPlayers;
     state.playerCount = numPlayers;
-    owned = true;
 }
 
-int GameEngine::addPlayer(const string & name, PlayerType type, int difficulty)
+int GameEngine::addPlayer(const std::string & name, PlayerType type, int difficulty)
 {
     for (int i = 0; i < playerCount; i++)
     {
@@ -91,7 +74,7 @@ void GameEngine::initDecks()
 void GameEngine::dealCards()
 {
     for (int i = 0; i < playerCount; i++)
-        for (int k = 0; k < 7; k++)
+        for (int k = 0; k < HAND_SIZE; k++)
             players[i].hand_add(mainDeck.draw());
 }
 
@@ -134,16 +117,14 @@ void GameEngine::start()
 void GameEngine::reset()
 {
     destroyStrategies();
-    if (owned && players)
+
+    for (int i = 0; i < playerCount; i++)
     {
-        for (int i = 0; i < playerCount; i++)
-        {
-            while (players[i].get_size() > 0)
-                players[i].hand_remove(0);
-        }
-        mainDeck = deck();
-        discardPile = deck();
+        while (players[i].get_size() > 0)
+            players[i].hand_remove(0);
     }
+    mainDeck = deck();
+    discardPile = deck();
 
     state.turn = 0;
     state.direction = 1;
@@ -178,7 +159,7 @@ bool GameEngine::validatePlay(int playerIdx, int cardIdx) const
     return ::canPlayCard(chosen, state.currentCard);
 }
 
-bool GameEngine::playCard(int playerIdx, int cardIdx, const string & chosenColor)
+bool GameEngine::playCard(int playerIdx, int cardIdx, const std::string & chosenColor)
 {
     if (playerIdx < 0 || playerIdx >= playerCount) return false;
     if (cardIdx < 0 || cardIdx >= players[playerIdx].get_size()) return false;
@@ -194,10 +175,10 @@ bool GameEngine::playCard(int playerIdx, int cardIdx, const string & chosenColor
     if (chosen.color == wild)
     {
         COLOR col = wild;
-        if (chosenColor == "do") col = red;
-        else if (chosenColor == "xanh la") col = green;
-        else if (chosenColor == "xanh duong") col = blue;
-        else if (chosenColor == "vang") col = yellow;
+        if (chosenColor == "do" || chosenColor == "red")           col = red;
+        else if (chosenColor == "xanh la" || chosenColor == "green")  col = green;
+        else if (chosenColor == "xanh duong" || chosenColor == "blue") col = blue;
+        else if (chosenColor == "vang" || chosenColor == "yellow")    col = yellow;
         if (col != wild)
             chosen.color = col;
     }
@@ -261,22 +242,22 @@ void GameEngine::reshuffleDiscard()
         if (mainDeck.get_size() == 0 && n > 0)
         {
             card c = discardPile.draw();
+            state.currentCard = c;
             discardPile.add_card(c);
-            mainDeck.add_card(c);
         }
         return;
     }
 
-    card * tmp = new card[n];
+    std::vector<card> tmp;
+    tmp.reserve(n);
     for (int i = 0; i < n; i++)
-        tmp[i] = discardPile.draw();
+        tmp.push_back(discardPile.draw());
 
     for (int i = 0; i < n - 1; i++)
         mainDeck.add_card(tmp[i]);
 
     state.currentCard = tmp[n - 1];
     discardPile.add_card(state.currentCard);
-    delete[] tmp;
     mainDeck.quick_shuffle();
 }
 
@@ -315,6 +296,8 @@ bool GameEngine::jumpIn(int playerIdx, int cardIdx)
 void GameEngine::callUno(int playerIdx)
 {
     if (playerIdx < 0 || playerIdx >= playerCount) return;
+    if (players[playerIdx].get_size() == 1)
+        state.jumpState = JUMP_AVAILABLE;
 }
 
 void GameEngine::catchUno(int callerIdx, int targetIdx)
@@ -333,20 +316,16 @@ void GameEngine::catchUno(int callerIdx, int targetIdx)
 
 void GameEngine::applyActionCard(const card & c)
 {
-    if (c.number == 11)
+    if (c.number == CARD_SKIP)
     {
         state.turn += state.direction;
     }
-    else if (c.number == 12)
+    else if (c.number == CARD_REVERSE)
     {
         if (playerCount == 2)
-        {
             state.turn += state.direction;
-        }
         else
-        {
             state.direction = -state.direction;
-        }
     }
 }
 
@@ -475,8 +454,4 @@ BotActionResult GameEngine::executeBotJumpIn(int playerIdx)
     }
 
     return result;
-}
-
-void GameEngine::setChosenColorName(const string & col)
-{
 }

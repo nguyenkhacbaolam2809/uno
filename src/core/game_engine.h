@@ -7,6 +7,7 @@
 #include "config.h"
 #include "rules.h"
 #include <string>
+#include <vector>
 
 class IBotStrategy;
 
@@ -96,19 +97,15 @@ public:
     BotActionResult executeBotTurn(int playerIdx);
     BotActionResult executeBotJumpIn(int playerIdx);
 
-    void setChosenColorName(const std::string & col);
-
 private:
     GameConfig config;
     bool vietRules;
 
     deck mainDeck;
     deck discardPile;
-    player * players;
+    std::vector<player> players;
+    std::vector<IBotStrategy*> botStrategies;
     int playerCount;
-    bool owned;
-
-    IBotStrategy ** botStrategies;
 
     GameState state;
 
@@ -116,9 +113,6 @@ private:
     void dealCards();
     void chooseRandomStarter();
     void applyActionCard(const card & c);
-    void handleJumpInPhase();
-    void handleDrawPhase(int playerIdx);
-    void handlePlayPhase(int playerIdx, int cardIdx, const std::string & chosenColor);
     void destroyStrategies();
 };
 

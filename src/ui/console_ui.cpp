@@ -4,7 +4,7 @@
 #include <fstream>
 #include <cstdlib>
 #include <limits>
-using namespace std;
+#include <string>
 
 ConsoleUI::ConsoleUI(const GameConfig & cfg)
     : config(cfg), vietRules(false)
@@ -17,34 +17,34 @@ ConsoleUI::~ConsoleUI()
 
 void ConsoleUI::waitForEnter()
 {
-    cout << msg(config, 43);
-    cin.clear();
-    cin.ignore(numeric_limits<streamsize>::max(), '\n');
-    cin.get();
+    std::cout << msg(config, 43);
+    std::cin.clear();
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    std::cin.get();
 }
 
 void ConsoleUI::showIntro()
 {
-    string filename = (config.lang == LANG_VIETNAMESE) ? "assets/intro_vi.txt" : "assets/intro.txt";
-    string line;
-    fstream myfile;
+    std::string filename = (config.lang == LANG_VIETNAMESE) ? "assets/intro_vi.txt" : "assets/intro.txt";
+    std::string line;
+    std::fstream myfile;
     myfile.open(filename.c_str());
     if (myfile.is_open())
     {
         while (getline(myfile, line))
-            cout << line << endl;
+            std::cout << line << std::endl;
         myfile.close();
     }
 }
 
 bool ConsoleUI::askVietnameseRules()
 {
-    string ans;
-    cout << msg(config, 51);
-    cin >> ans;
+    std::string ans;
+    std::cout << msg(config, 51);
+    std::cin >> ans;
     if (ans == "y" || ans == "c")
     {
-        cout << msg(config, 52) << endl;
+        std::cout << msg(config, 52) << std::endl;
         return true;
     }
     return false;
@@ -53,49 +53,49 @@ bool ConsoleUI::askVietnameseRules()
 void ConsoleUI::showMainMenu()
 {
     clearScreen(config);
-    cout << msg(config, 24) << endl;
-    cout << msg(config, 25) << endl;
-    cout << msg(config, 26) << endl;
-    cout << msg(config, 27) << endl;
-    cout << msg(config, 28) << endl;
-    cout << msg(config, 29) << endl;
-    cout << msg(config, 30);
+    std::cout << msg(config, 24) << std::endl;
+    std::cout << msg(config, 25) << std::endl;
+    std::cout << msg(config, 26) << std::endl;
+    std::cout << msg(config, 27) << std::endl;
+    std::cout << msg(config, 28) << std::endl;
+    std::cout << msg(config, 29) << std::endl;
+    std::cout << msg(config, 30);
 }
 
 void ConsoleUI::showTurnHeader(player & p, const GameEngine & engine)
 {
-    cout << "=== " << msg(config, 5) << " " << p.getName() << " ===" << endl;
+    std::cout << "=== " << msg(config, 5) << " " << p.getName() << " ===" << std::endl;
 }
 
 void ConsoleUI::showGameStatus(const GameEngine & engine)
 {
-    cout << msg(config, 12) << endl;
+    std::cout << msg(config, 12) << std::endl;
     for (int i = 0; i < engine.getPlayerCount(); i++)
     {
         const player * p = engine.getPlayer(i);
-        cout << p->getName() << ": " << p->get_size() << "   ";
+        std::cout << p->getName() << ": " << p->get_size() << "   ";
     }
-    cout << endl;
-    cout << msg(config, 13) << engine.getCurrentCard() << endl;
+    std::cout << std::endl;
+    std::cout << msg(config, 13) << engine.getCurrentCard() << std::endl;
 }
 
-int ConsoleUI::pickCardFromHand(player & p, const card & current, bool forceDraw)
+int ConsoleUI::pickCardFromHand(player & p, const card & current)
 {
     while (true)
     {
-        cout << msg(config, 14) << endl;
-        cout << msg(config, 15) << endl;
+        std::cout << msg(config, 14) << std::endl;
+        std::cout << msg(config, 15) << std::endl;
 
         p.print();
-        cout << msg(config, 16);
+        std::cout << msg(config, 16);
 
         int idx;
-        cin >> idx;
-        if (cin.fail())
+        std::cin >> idx;
+        if (std::cin.fail())
         {
-            cin.clear();
-            cin.ignore(numeric_limits<streamsize>::max(), '\n');
-            cout << msg(config, 22) << endl;
+            std::cin.clear();
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            std::cout << msg(config, 22) << std::endl;
             continue;
         }
 
@@ -103,7 +103,7 @@ int ConsoleUI::pickCardFromHand(player & p, const card & current, bool forceDraw
             return -1;
         if (idx < 0 || idx >= p.get_size())
         {
-            cout << msg(config, 22) << endl;
+            std::cout << msg(config, 22) << std::endl;
             continue;
         }
 
@@ -111,28 +111,28 @@ int ConsoleUI::pickCardFromHand(player & p, const card & current, bool forceDraw
         if (canPlayCard(chosen, current))
             return idx;
 
-        cout << msg(config, 21) << endl;
+        std::cout << msg(config, 21) << std::endl;
     }
 }
 
-string ConsoleUI::pickColor()
+std::string ConsoleUI::pickColor()
 {
-    string str;
+    std::string str;
     while (true)
     {
-        cout << msg(config, 19);
-        cin >> str;
-        if (cin.fail())
+        std::cout << msg(config, 19);
+        std::cin >> str;
+        if (std::cin.fail())
         {
-            cin.clear();
-            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            std::cin.clear();
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
             continue;
         }
         if (str == "do" || str == "red") return str;
         if (str == "xanh la" || str == "green") return str;
         if (str == "xanh duong" || str == "blue") return str;
         if (str == "vang" || str == "yellow") return str;
-        cout << msg(config, 20) << endl;
+        std::cout << msg(config, 20) << std::endl;
     }
 }
 
@@ -144,7 +144,7 @@ void ConsoleUI::handleHumanTurn(GameEngine & engine, int playerIdx)
 
     if (hasForceDraw)
     {
-        cout << msg(config, 10) << " x" << engine.getDrawStack() << endl;
+        std::cout << msg(config, 10) << " x" << engine.getDrawStack() << std::endl;
         engine.drawCard(playerIdx);
 
         bool canStack = false;
@@ -160,12 +160,12 @@ void ConsoleUI::handleHumanTurn(GameEngine & engine, int playerIdx)
 
         if (canStack)
         {
-            int idx = pickCardFromHand(*p, currentCard, true);
+            int idx = pickCardFromHand(*p, currentCard);
             if (idx == -1) return;
             card chosen = p->peek(idx);
             if (isStackCard(chosen) && canPlayCard(chosen, currentCard))
             {
-                string col;
+                std::string col;
                 if (chosen.color == wild)
                     col = pickColor();
                 engine.playCard(playerIdx, idx, col);
@@ -175,23 +175,23 @@ void ConsoleUI::handleHumanTurn(GameEngine & engine, int playerIdx)
         return;
     }
 
-    int idx = pickCardFromHand(*p, currentCard, false);
+    int idx = pickCardFromHand(*p, currentCard);
     if (idx == -1)
     {
-        cout << msg(config, 42) << endl;
+        std::cout << msg(config, 42) << std::endl;
         engine.drawCard(playerIdx);
 
         int lastIdx = p->get_size() - 1;
         card drawn = p->peek(lastIdx);
         if (canPlayCard(drawn, currentCard))
         {
-            cout << msg(config, 17) << drawn << endl;
-            string ans;
-            cout << msg(config, 18);
-            cin >> ans;
+            std::cout << msg(config, 17) << drawn << std::endl;
+            std::string ans;
+            std::cout << msg(config, 18);
+            std::cin >> ans;
             if (ans == "y" || ans == "c")
             {
-                string col;
+                std::string col;
                 if (drawn.color == wild)
                     col = pickColor();
                 engine.playCard(playerIdx, lastIdx, col);
@@ -201,18 +201,18 @@ void ConsoleUI::handleHumanTurn(GameEngine & engine, int playerIdx)
     }
 
     card chosen = p->peek(idx);
-    string colorName;
+    std::string colorName;
     if (chosen.color == wild)
         colorName = pickColor();
 
-    if (vietRules && p->get_size() == 1)
+    if (vietRules && p->get_size() == 2)
     {
-        cout << p->getName() << ": " << msg(config, 44) << endl;
-        string unoAns;
-        cin >> unoAns;
+        std::cout << p->getName() << ": " << msg(config, 44) << "? ";
+        std::string unoAns;
+        std::cin >> unoAns;
         if (unoAns != "y" && unoAns != "c")
         {
-            cout << msg(config, 45) << endl;
+            std::cout << msg(config, 45) << std::endl;
             engine.drawCard(playerIdx);
             engine.drawCard(playerIdx);
         }
@@ -229,24 +229,10 @@ void ConsoleUI::handleBotTurn(GameEngine & engine, int playerIdx)
     switch (act.action)
     {
         case BOT_PLAY_CARD:
-        {
-            card chosen = p->peek(act.cardIdx);
-            string col;
-            if (chosen.color == wild)
-            {
-                if (act.chosenColor == red) col = "do";
-                else if (act.chosenColor == green) col = "xanh la";
-                else if (act.chosenColor == blue) col = "xanh duong";
-                else if (act.chosenColor == yellow) col = "vang";
-                else col = "do";
-            }
-            engine.playCard(playerIdx, act.cardIdx, col);
-            break;
-        }
         case BOT_STACK_CARD:
         {
             card chosen = p->peek(act.cardIdx);
-            string col;
+            std::string col;
             if (chosen.color == wild)
             {
                 if (act.chosenColor == red) col = "do";
@@ -265,7 +251,7 @@ void ConsoleUI::handleBotTurn(GameEngine & engine, int playerIdx)
             card drawn = p->peek(lastIdx);
             if (canPlayCard(drawn, engine.getCurrentCard()))
             {
-                string col;
+                std::string col;
                 if (drawn.color == wild)
                 {
                     if (act.chosenColor == red) col = "do";
@@ -296,7 +282,7 @@ void ConsoleUI::processGameLoop(GameEngine & engine)
 
         if (p->isBot())
         {
-            cout << msg(config, 42) << endl;
+            std::cout << msg(config, 42) << std::endl;
             handleBotTurn(engine, playerIdx);
         }
         else
@@ -315,27 +301,27 @@ void ConsoleUI::processGameLoop(GameEngine & engine)
     if (winner >= 0)
     {
         clearScreen(config);
-        cout << engine.getPlayer(winner)->getName() << msg(config, 23) << endl;
+        std::cout << engine.getPlayer(winner)->getName() << msg(config, 23) << std::endl;
     }
 }
 
 void ConsoleUI::modeSinglePlayer()
 {
     clearScreen(config);
-    cout << "=== " << msg(config, 25) << " ===" << endl;
+    std::cout << "=== " << msg(config, 25) << " ===" << std::endl;
 
     int diff;
-    cout << msg(config, 32) << endl;
-    cout << msg(config, 33) << endl;
-    cout << msg(config, 34) << endl;
-    cout << msg(config, 35) << endl;
-    cout << msg(config, 36);
-    cin >> diff;
+    std::cout << msg(config, 32) << std::endl;
+    std::cout << msg(config, 33) << std::endl;
+    std::cout << msg(config, 34) << std::endl;
+    std::cout << msg(config, 35) << std::endl;
+    std::cout << msg(config, 36);
+    std::cin >> diff;
     if (diff < 1 || diff > 3) diff = 1;
 
     int numBots;
-    cout << msg(config, 39);
-    cin >> numBots;
+    std::cout << msg(config, 39);
+    std::cin >> numBots;
     if (numBots < 1) numBots = 1;
     if (numBots > 4) numBots = 4;
 
@@ -343,13 +329,13 @@ void ConsoleUI::modeSinglePlayer()
     GameEngine engine(config, vietRules);
     engine.init(total);
 
-    string name;
-    cout << msg(config, 37);
-    cin >> name;
+    std::string name;
+    std::cout << msg(config, 37);
+    std::cin >> name;
     engine.addPlayer(name, HUMAN, 0);
 
     for (int i = 1; i < total; i++)
-        engine.addPlayer(msg(config, 40) + " " + to_string(i), BOT, diff - 1);
+        engine.addPlayer(msg(config, 40) + " " + std::to_string(i), BOT, diff - 1);
 
     processGameLoop(engine);
 }
@@ -357,11 +343,11 @@ void ConsoleUI::modeSinglePlayer()
 void ConsoleUI::modeLocalMultiplayer()
 {
     clearScreen(config);
-    cout << "=== " << msg(config, 26) << " ===" << endl;
+    std::cout << "=== " << msg(config, 26) << " ===" << std::endl;
 
     int amount;
-    cout << msg(config, 1);
-    cin >> amount;
+    std::cout << msg(config, 1);
+    std::cin >> amount;
     if (amount < 2) amount = 2;
     if (amount > 5) amount = 5;
 
@@ -370,9 +356,9 @@ void ConsoleUI::modeLocalMultiplayer()
 
     for (int i = 0; i < amount; i++)
     {
-        string name;
-        cout << msg(config, 37);
-        cin >> name;
+        std::string name;
+        std::cout << msg(config, 37);
+        std::cin >> name;
         engine.addPlayer(name, HUMAN, 0);
     }
 
@@ -382,26 +368,26 @@ void ConsoleUI::modeLocalMultiplayer()
 void ConsoleUI::modeMixed()
 {
     clearScreen(config);
-    cout << "=== " << msg(config, 27) << " ===" << endl;
+    std::cout << "=== " << msg(config, 27) << " ===" << std::endl;
 
     int diff;
-    cout << msg(config, 32) << endl;
-    cout << msg(config, 33) << endl;
-    cout << msg(config, 34) << endl;
-    cout << msg(config, 35) << endl;
-    cout << msg(config, 36);
-    cin >> diff;
+    std::cout << msg(config, 32) << std::endl;
+    std::cout << msg(config, 33) << std::endl;
+    std::cout << msg(config, 34) << std::endl;
+    std::cout << msg(config, 35) << std::endl;
+    std::cout << msg(config, 36);
+    std::cin >> diff;
     if (diff < 1 || diff > 3) diff = 1;
 
     int numHumans, numBots;
-    cout << msg(config, 38);
-    cin >> numHumans;
+    std::cout << msg(config, 38);
+    std::cin >> numHumans;
     if (numHumans < 1) numHumans = 1;
     if (numHumans > 4) numHumans = 4;
 
     int maxBots = 5 - numHumans;
-    cout << msg(config, 39);
-    cin >> numBots;
+    std::cout << msg(config, 39);
+    std::cin >> numBots;
     if (numBots < 1) numBots = 1;
     if (numBots > maxBots) numBots = maxBots;
 
@@ -411,13 +397,13 @@ void ConsoleUI::modeMixed()
 
     for (int i = 0; i < numHumans; i++)
     {
-        string name;
-        cout << msg(config, 37);
-        cin >> name;
+        std::string name;
+        std::cout << msg(config, 37);
+        std::cin >> name;
         engine.addPlayer(name, HUMAN, 0);
     }
     for (int i = 0; i < numBots; i++)
-        engine.addPlayer(msg(config, 40) + " " + to_string(i + 1), BOT, diff - 1);
+        engine.addPlayer(msg(config, 40) + " " + std::to_string(i + 1), BOT, diff - 1);
 
     processGameLoop(engine);
 }
@@ -425,31 +411,31 @@ void ConsoleUI::modeMixed()
 void ConsoleUI::modeLanServer()
 {
     clearScreen(config);
-    cout << "=== " << msg(config, 28) << " ===" << endl;
+    std::cout << "=== " << msg(config, 28) << " ===" << std::endl;
 
     int port = DEFAULT_PORT;
-    cout << msg(config, 58);
-    string portStr;
-    cin >> portStr;
+    std::cout << msg(config, 58);
+    std::string portStr;
+    std::cin >> portStr;
     if (!portStr.empty())
-        port = atoi(portStr.c_str());
+        port = std::atoi(portStr.c_str());
     if (port <= 0) port = DEFAULT_PORT;
 
     NetworkServer server(config, vietRules);
     if (!server.start(port))
     {
-        cout << "Failed to start server!" << endl;
+        std::cout << "Failed to start server!" << std::endl;
         waitForEnter();
         return;
     }
 
     int numPlayers;
-    cout << msg(config, 1);
-    cin >> numPlayers;
+    std::cout << msg(config, 1);
+    std::cin >> numPlayers;
     if (numPlayers < 2) numPlayers = 2;
     if (numPlayers > 5) numPlayers = 5;
 
-    cout << msg(config, 55) << endl;
+    std::cout << msg(config, 55) << std::endl;
 
     int remotePlayers = numPlayers - 1;
     if (!server.waitForPlayers(remotePlayers))
@@ -462,28 +448,28 @@ void ConsoleUI::modeLanServer()
 void ConsoleUI::modeLanClient()
 {
     clearScreen(config);
-    cout << "=== " << msg(config, 28) << " ===" << endl;
+    std::cout << "=== " << msg(config, 28) << " ===" << std::endl;
 
-    string ip;
-    cout << msg(config, 57);
-    cin >> ip;
+    std::string ip;
+    std::cout << msg(config, 57);
+    std::cin >> ip;
 
     int port = DEFAULT_PORT;
-    cout << msg(config, 58);
-    string portStr;
-    cin >> portStr;
+    std::cout << msg(config, 58);
+    std::string portStr;
+    std::cin >> portStr;
     if (!portStr.empty())
-        port = atoi(portStr.c_str());
+        port = std::atoi(portStr.c_str());
     if (port <= 0) port = DEFAULT_PORT;
 
     NetworkClient client;
     if (!client.connect(ip, port))
     {
-        cout << "Connection failed!" << endl;
+        std::cout << "Connection failed!" << std::endl;
         waitForEnter();
         return;
     }
-    cout << msg(config, 54) << endl;
+    std::cout << msg(config, 54) << std::endl;
 
     int myPlayerId = 0;
     SyncState state;
@@ -498,46 +484,46 @@ void ConsoleUI::modeLanClient()
 
         if (state.gs.phase == PHASE_GAME_OVER)
         {
-            cout << state.players[state.gs.winner].name
-                 << msg(config, 23) << endl;
+            std::cout << state.players[state.gs.winner].name
+                 << msg(config, 23) << std::endl;
             waitForEnter();
             break;
         }
 
-        cout << msg(config, 13) << state.gs.currentCard << endl;
-        cout << endl;
+        std::cout << msg(config, 13) << state.gs.currentCard << std::endl;
+        std::cout << std::endl;
 
-        for (int i = 0; i < (int)state.players.size(); i++)
+        for (std::size_t i = 0; i < state.players.size(); i++)
         {
-            if (i == myPlayerId)
+            if ((int)i == myPlayerId)
             {
-                cout << state.players[i].name << " (YOU)"
+                std::cout << state.players[i].name << " (YOU)"
                      << ": " << state.players[i].hand.size() << " cards"
-                     << endl;
-                cout << msg(config, 5) << i + 1 << " ";
-                for (int j = 0; j < (int)state.players[i].hand.size(); j++)
-                    cout << j << ": " << state.players[i].hand[j] << "  ";
-                cout << endl;
+                     << std::endl;
+                std::cout << msg(config, 5) << i + 1 << " ";
+                for (std::size_t j = 0; j < state.players[i].hand.size(); j++)
+                    std::cout << j << ": " << state.players[i].hand[j] << "  ";
+                std::cout << std::endl;
             }
             else
             {
-                cout << state.players[i].name
+                std::cout << state.players[i].name
                      << ": " << state.players[i].hand.size() << " cards"
-                     << endl;
+                     << std::endl;
             }
         }
-        cout << endl;
+        std::cout << std::endl;
 
-        if (state.gs.turn % state.players.size() != (size_t)myPlayerId)
+        if (state.gs.turn % (int)state.players.size() != myPlayerId)
         {
-            cout << msg(config, 42) << endl;
+            std::cout << msg(config, 42) << std::endl;
             waitForEnter();
             continue;
         }
 
         if (state.gs.forceDraw)
         {
-            cout << msg(config, 10) << " x" << state.gs.drawStack << endl;
+            std::cout << msg(config, 10) << " x" << state.gs.drawStack << std::endl;
             client.sendDraw(myPlayerId);
             waitForEnter();
             continue;
@@ -547,7 +533,7 @@ void ConsoleUI::modeLanClient()
         card currentCard = state.gs.currentCard;
         bool played = false;
 
-        for (int j = 0; j < (int)me.hand.size(); j++)
+        for (std::size_t j = 0; j < me.hand.size(); j++)
         {
             if (canPlayCard(me.hand[j], currentCard))
             {
@@ -558,24 +544,24 @@ void ConsoleUI::modeLanClient()
 
         if (!played)
         {
-            cout << msg(config, 42) << endl;
+            std::cout << msg(config, 42) << std::endl;
             client.sendDraw(myPlayerId);
             waitForEnter();
             continue;
         }
 
-        cout << msg(config, 14) << endl;
-        cout << msg(config, 16);
+        std::cout << msg(config, 14) << std::endl;
+        std::cout << msg(config, 16);
 
         int idx;
-        cin >> idx;
+        std::cin >> idx;
 
         if (idx >= 0 && idx < (int)me.hand.size())
         {
             card chosen = me.hand[idx];
             if (canPlayCard(chosen, currentCard))
             {
-                string col;
+                std::string col;
                 if (chosen.color == wild)
                     col = pickColor();
                 client.sendPlayCard(idx, col, myPlayerId);
@@ -591,10 +577,10 @@ void ConsoleUI::modeLanClient()
 void ConsoleUI::modeLan()
 {
     clearScreen(config);
-    cout << "=== " << msg(config, 28) << " ===" << endl;
-    cout << msg(config, 56);
+    std::cout << "=== " << msg(config, 28) << " ===" << std::endl;
+    std::cout << msg(config, 56);
     int choice;
-    cin >> choice;
+    std::cin >> choice;
 
     if (choice == 1)
         modeLanServer();
@@ -612,11 +598,11 @@ void ConsoleUI::run()
     {
         showMainMenu();
         int choice;
-        cin >> choice;
-        if (cin.fail())
+        std::cin >> choice;
+        if (std::cin.fail())
         {
-            cin.clear();
-            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            std::cin.clear();
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
             choice = -1;
         }
 
@@ -628,7 +614,7 @@ void ConsoleUI::run()
             case 4: modeLan(); break;
             case 5: return;
             default:
-                cout << msg(config, 31) << endl;
+                std::cout << msg(config, 31) << std::endl;
                 waitForEnter();
                 continue;
         }

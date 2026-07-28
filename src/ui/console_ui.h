@@ -36,7 +36,7 @@ private:
     void showGameStatus(const GameEngine & engine);
     void handleHumanTurn(GameEngine & engine, int playerIdx);
     void handleBotTurn(GameEngine & engine, int playerIdx);
-    int pickCardFromHand(player & p, const card & current, bool forceDraw);
+    int pickCardFromHand(player & p, const card & current);
     std::string pickColor();
     void processGameLoop(GameEngine & engine);
 };

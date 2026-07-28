@@ -1,5 +1,4 @@
 #include "bot_medium.h"
-using namespace std;
 
 int MediumBotStrategy::pickCard(player * self, const card & current,
                                 int, int, const int *, int, int)

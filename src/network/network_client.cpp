@@ -4,7 +4,7 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <windows.h>
-using namespace std;
+#include <string>
 
 NetworkClient::NetworkClient() : sock(INVALID_SOCKET), connected(false) {}
 
@@ -24,18 +24,18 @@ void NetworkClient::cleanupWinsock()
     WSACleanup();
 }
 
-bool NetworkClient::connect(const string & host, int port)
+bool NetworkClient::connect(const std::string & host, int port)
 {
     if (!initWinsock())
     {
-        cerr << "WSAStartup failed" << endl;
+        std::cerr << "WSAStartup failed" << std::endl;
         return false;
     }
 
     sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sock == INVALID_SOCKET)
     {
-        cerr << "Socket creation failed: " << WSAGetLastError() << endl;
+        std::cerr << "Socket creation failed: " << WSAGetLastError() << std::endl;
         cleanupWinsock();
         return false;
     }
@@ -47,7 +47,7 @@ bool NetworkClient::connect(const string & host, int port)
 
     if (::connect(sock, (sockaddr *)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
     {
-        cerr << "Connection failed: " << WSAGetLastError() << endl;
+        std::cerr << "Connection failed: " << WSAGetLastError() << std::endl;
         closesocket(sock);
         sock = INVALID_SOCKET;
         cleanupWinsock();
@@ -96,25 +96,6 @@ bool NetworkClient::readRaw(void * buffer, int len)
     }
     return true;
 }
-
-int NetworkClient::readSome(void * buffer, int len, int timeoutMs)
-{
-    if (sock == INVALID_SOCKET) return -1;
-
-    fd_set readSet;
-    FD_ZERO(&readSet);
-    FD_SET(sock, &readSet);
-
-    timeval tv;
-    tv.tv_sec = timeoutMs / 1000;
-    tv.tv_usec = (timeoutMs % 1000) * 1000;
-
-    int result = select(0, &readSet, NULL, NULL, &tv);
-    if (result <= 0) return result;
-
-    return recv(sock, (char *)buffer, len, 0);
-}
-
 bool NetworkClient::receiveSyncState(SyncState & state, int timeoutMs)
 {
     PacketHeader header;
@@ -180,7 +161,7 @@ bool NetworkClient::receiveSyncState(SyncState & state, int timeoutMs)
     return true;
 }
 
-bool NetworkClient::sendPlayCard(int cardIdx, const string & chosenColor, int playerId)
+bool NetworkClient::sendPlayCard(int cardIdx, const std::string & chosenColor, int playerId)
 {
     char buffer[sizeof(PacketHeader) + sizeof(PacketPlayCard)];
     PacketHeader * header = (PacketHeader *)buffer;

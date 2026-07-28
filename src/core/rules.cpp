@@ -2,24 +2,24 @@
 
 int getStackValue(const card & c)
 {
-    if (c.number == 10) return 2;
-    if (c.number == 14) return 4;
+    if (c.number == CARD_DRAW_TWO) return 2;
+    if (c.number == CARD_WILD_DRAW_FOUR) return 4;
     return 0;
 }
 
 bool isStackCard(const card & c)
 {
-    return c.number == 10 || c.number == 14;
+    return c.number == CARD_DRAW_TWO || c.number == CARD_WILD_DRAW_FOUR;
 }
 
 bool isActionCard(const card & c)
 {
-    return c.number >= 10 && c.number <= 14;
+    return c.number >= CARD_DRAW_TWO && c.number <= CARD_WILD_DRAW_FOUR;
 }
 
 bool isSpecialCard(const card & c)
 {
-    return c.number == 13 || c.number == 14;
+    return c.number == CARD_WILD || c.number == CARD_WILD_DRAW_FOUR;
 }
 
 bool canPlayCard(const card & played, const card & current)
@@ -37,6 +37,8 @@ bool canJumpIn(const card & played, const card & current)
 
 bool isLegalLastCard(const card & c)
 {
-    if (c.number == 10 || c.number == 13 || c.number == 14) return false;
+    if (c.number == CARD_DRAW_TWO ||
+        c.number == CARD_WILD ||
+        c.number == CARD_WILD_DRAW_FOUR) return false;
     return true;
 }

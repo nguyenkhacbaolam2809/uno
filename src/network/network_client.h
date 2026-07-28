@@ -51,7 +51,6 @@ private:
     void cleanupWinsock();
     bool sendRaw(const void * data, int len);
     bool readRaw(void * buffer, int len);
-    int readSome(void * buffer, int len, int timeoutMs);
 };
 
 #endif

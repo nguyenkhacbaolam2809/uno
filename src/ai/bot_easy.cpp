@@ -1,6 +1,5 @@
 #include "bot_easy.h"
 #include <cstdlib>
-using namespace std;
 
 int EasyBotStrategy::pickCard(player * self, const card & current,
                               int, int, const int *, int, int)

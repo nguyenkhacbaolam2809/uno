@@ -4,7 +4,7 @@
 #include <iostream>
 #include <cstring>
 #include <sstream>
-using namespace std;
+#include <string>
 
 CRITICAL_SECTION NetworkServer::clientsLock;
 bool NetworkServer::csInitialized = false;
@@ -34,7 +34,7 @@ bool NetworkServer::initWinsock()
     int result = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (result != 0)
     {
-        cerr << "WSAStartup failed: " << result << endl;
+        std::cerr << "WSAStartup failed: " << result << std::endl;
         return false;
     }
     return true;
@@ -53,7 +53,7 @@ bool NetworkServer::start(int port)
     listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (listenSocket == INVALID_SOCKET)
     {
-        cerr << "Socket creation failed: " << WSAGetLastError() << endl;
+        std::cerr << "Socket creation failed: " << WSAGetLastError() << std::endl;
         cleanupWinsock();
         return false;
     }
@@ -65,7 +65,7 @@ bool NetworkServer::start(int port)
 
     if (bind(listenSocket, (sockaddr *)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
     {
-        cerr << "Bind failed: " << WSAGetLastError() << endl;
+        std::cerr << "Bind failed: " << WSAGetLastError() << std::endl;
         closesocket(listenSocket);
         cleanupWinsock();
         return false;
@@ -73,7 +73,7 @@ bool NetworkServer::start(int port)
 
     if (listen(listenSocket, MAX_CLIENTS) == SOCKET_ERROR)
     {
-        cerr << "Listen failed: " << WSAGetLastError() << endl;
+        std::cerr << "Listen failed: " << WSAGetLastError() << std::endl;
         closesocket(listenSocket);
         cleanupWinsock();
         return false;
@@ -85,7 +85,7 @@ bool NetworkServer::start(int port)
         InitializeCriticalSection(&clientsLock);
         csInitialized = true;
     }
-    cout << msg(config, 53) << port << endl;
+    std::cout << msg(config, 53) << port << std::endl;
     return true;
 }
 
@@ -127,7 +127,7 @@ bool NetworkServer::waitForPlayers(int expectedPlayers)
         if (newSock == INVALID_SOCKET)
         {
             if (running)
-                cerr << "Accept failed: " << WSAGetLastError() << endl;
+                std::cerr << "Accept failed: " << WSAGetLastError() << std::endl;
             continue;
         }
 
@@ -152,7 +152,7 @@ bool NetworkServer::waitForPlayers(int expectedPlayers)
                     delete param;
                 }
 
-                cout << "Player " << clientCount << " connected" << endl;
+                std::cout << "Player " << clientCount << " connected" << std::endl;
                 break;
             }
         }
@@ -224,8 +224,8 @@ DWORD NetworkServer::clientReceiveThread(int clientIdx)
                     PacketPlayCard * pkt = (PacketPlayCard *)bodyBuf;
                     if (pkt->chosenColor <= 4)
                     {
-                        string colorNames[] = {"", "do", "xanh la", "xanh duong", "vang"};
-                        string chosenCol = colorNames[pkt->chosenColor];
+                        std::string colorNames[] = {"", "do", "xanh la", "xanh duong", "vang"};
+                        std::string chosenCol = colorNames[pkt->chosenColor];
                         engine.playCard(header->playerId, pkt->cardIndex, chosenCol);
                         broadcastSyncState();
                     }
@@ -335,7 +335,7 @@ void NetworkServer::broadcastSyncState()
     for (int i = 0; i < pCount; i++)
     {
         const player * p = engine.getPlayer(i);
-        string name = p->getName();
+        std::string name = p->getName();
         int nameLen = (int)name.length();
         int cardCount = p->get_size();
         int pType = (int)p->getType();
@@ -387,8 +387,8 @@ void NetworkServer::runGameLoop()
     engine.init(connectedPlayers);
     for (int i = 0; i < connectedPlayers; i++)
     {
-        string pname = "Player ";
-        pname += to_string(i + 1);
+        std::string pname = "Player ";
+        pname += std::to_string(i + 1);
         engine.addPlayer(pname, HUMAN, 0);
     }
 
@@ -405,8 +405,8 @@ void NetworkServer::runGameLoop()
         broadcastSyncState();
         int winner = engine.getWinner();
         if (winner >= 0)
-            cout << engine.getPlayer(winner)->getName()
-                 << msg(config, 23) << endl;
+            std::cout << engine.getPlayer(winner)->getName()
+                 << msg(config, 23) << std::endl;
     }
 
     Sleep(2000);

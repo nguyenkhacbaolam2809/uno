@@ -7,14 +7,12 @@ const int MAX_CLIENTS = 4;
 
 enum PacketType : unsigned char
 {
-    PKT_JOIN_ROOM,
     PKT_PLAY_CARD,
     PKT_DRAW,
     PKT_JUMP_IN,
     PKT_CALL_UNO,
     PKT_CATCH_UNO,
-    PKT_SYNC_STATE,
-    PKT_PLAYER_DISCONNECT
+    PKT_SYNC_STATE
 };
 
 #pragma pack(push, 1)
@@ -34,11 +32,6 @@ struct PacketPlayCard
 struct PacketJumpIn
 {
     unsigned char cardIndex;
-};
-
-struct PacketDraw
-{
-    unsigned char drawnCount;
 };
 
 struct PacketUno

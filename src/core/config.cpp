@@ -2,17 +2,17 @@
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
-using namespace std;
+#include <string>
 
 GameConfig promptConfig()
 {
     GameConfig config;
 
-    string os_input;
+    std::string os_input;
     while (true)
     {
-        cout << "Are you running on Ubuntu or Windows? [ubuntu/windows]: ";
-        cin >> os_input;
+        std::cout << "Are you running on Ubuntu or Windows? [ubuntu/windows]: ";
+        std::cin >> os_input;
         if (os_input == "ubuntu" || os_input == "u")
         {
             config.os = OS_UBUNTU;
@@ -25,15 +25,15 @@ GameConfig promptConfig()
         }
         else
         {
-            cout << "Invalid choice. Please type 'ubuntu' or 'windows'." << endl;
+            std::cout << "Invalid choice. Please type 'ubuntu' or 'windows'." << std::endl;
         }
     }
 
-    string lang_input;
+    std::string lang_input;
     while (true)
     {
-        cout << "Choose language / Chon ngon ngu? [en/vi]: ";
-        cin >> lang_input;
+        std::cout << "Choose language / Chon ngon ngu? [en/vi]: ";
+        std::cin >> lang_input;
         if (lang_input == "en" || lang_input == "english")
         {
             config.lang = LANG_ENGLISH;
@@ -46,7 +46,7 @@ GameConfig promptConfig()
         }
         else
         {
-            cout << "Invalid choice. Please type 'en' or 'vi'." << endl;
+            std::cout << "Invalid choice. Please type 'en' or 'vi'." << std::endl;
         }
     }
 
@@ -60,27 +60,7 @@ void clearScreen(const GameConfig& config)
     else
         system("cls");
 }
-
-void display_intro(const GameConfig& config)
-{
-    string filename = (config.lang == LANG_VIETNAMESE) ? "intro_vi.txt" : "intro.txt";
-    string line;
-    fstream myfile;
-    myfile.open(filename.c_str());
-    if (myfile.is_open())
-    {
-        while (getline(myfile, line))
-            cout << line << endl;
-        myfile.close();
-    }
-    else
-    {
-        string err = (config.lang == LANG_VIETNAMESE) ? "loi khong the mo file " : "error unable to open file ";
-        cout << err << filename << endl;
-    }
-}
-
-string msg(const GameConfig& config, int msgId)
+std::string msg(const GameConfig& config, int msgId)
 {
     if (config.lang == LANG_ENGLISH)
     {
