@@ -30,7 +30,7 @@ bool EasyBotStrategy::shouldJumpIn(player * self, const card & target)
     return false;
 }
 
-IBotStrategy * EasyBotStrategy::clone() const
+std::unique_ptr<IBotStrategy> EasyBotStrategy::clone() const
 {
-    return new EasyBotStrategy(*this);
+    return std::make_unique<EasyBotStrategy>(*this);
 }

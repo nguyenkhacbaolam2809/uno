@@ -75,7 +75,7 @@ bool MediumBotStrategy::shouldJumpIn(player * self, const card & target)
     return false;
 }
 
-IBotStrategy * MediumBotStrategy::clone() const
+std::unique_ptr<IBotStrategy> MediumBotStrategy::clone() const
 {
-    return new MediumBotStrategy(*this);
+    return std::make_unique<MediumBotStrategy>(*this);
 }

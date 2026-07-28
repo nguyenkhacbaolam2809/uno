@@ -19,7 +19,7 @@ public:
 
     bool shouldJumpIn(player * self, const card & target) override;
 
-    IBotStrategy * clone() const override;
+    std::unique_ptr<IBotStrategy> clone() const override;
 
 private:
     int prevOppSizes[5];

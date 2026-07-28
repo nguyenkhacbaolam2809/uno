@@ -62,7 +62,7 @@ void ConsoleUI::showMainMenu()
     std::cout << msg(config, 30);
 }
 
-void ConsoleUI::showTurnHeader(player & p, const GameEngine & engine)
+void ConsoleUI::showTurnHeader(player & p, const GameEngine & /*engine*/)
 {
     std::cout << "=== " << msg(config, 5) << " " << p.getName() << " ===" << std::endl;
 }

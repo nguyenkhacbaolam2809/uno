@@ -2,12 +2,11 @@
 #include "bot_factory.h"
 #include "rules.h"
 #include <cstdlib>
-#include <ctime>
 #include <cstring>
 #include <iostream>
 
-GameEngine::GameEngine(const GameConfig & cfg, bool vietRules)
-    : config(cfg), vietRules(vietRules)
+GameEngine::GameEngine(const GameConfig & cfg, bool viet)
+    : config(cfg), vietRules(viet)
 {
     state.turn = 0;
     state.direction = 1;
@@ -21,27 +20,13 @@ GameEngine::GameEngine(const GameConfig & cfg, bool vietRules)
     state.jumperId = -1;
 }
 
-GameEngine::~GameEngine()
-{
-    destroyStrategies();
-}
-
-void GameEngine::destroyStrategies()
-{
-    for (std::size_t i = 0; i < botStrategies.size(); i++)
-    {
-        if (botStrategies[i])
-            delete botStrategies[i];
-    }
-    botStrategies.clear();
-}
+GameEngine::~GameEngine() = default;
 
 void GameEngine::init(int numPlayers)
 {
-    destroyStrategies();
-
+    botStrategies.clear();
     players.assign(numPlayers, player());
-    botStrategies.assign(numPlayers, nullptr);
+    botStrategies.resize(numPlayers);
 
     for (int i = 0; i < numPlayers; i++)
         players[i].setName("");
@@ -116,7 +101,7 @@ void GameEngine::start()
 
 void GameEngine::reset()
 {
-    destroyStrategies();
+    botStrategies.clear();
 
     for (int i = 0; i < playerCount; i++)
     {
@@ -296,11 +281,9 @@ bool GameEngine::jumpIn(int playerIdx, int cardIdx)
 void GameEngine::callUno(int playerIdx)
 {
     if (playerIdx < 0 || playerIdx >= playerCount) return;
-    if (players[playerIdx].get_size() == 1)
-        state.jumpState = JUMP_AVAILABLE;
 }
 
-void GameEngine::catchUno(int callerIdx, int targetIdx)
+void GameEngine::catchUno(int /*callerIdx*/, int targetIdx)
 {
     if (!vietRules) return;
     if (targetIdx < 0 || targetIdx >= playerCount) return;
@@ -355,7 +338,7 @@ BotActionResult GameEngine::executeBotTurn(int playerIdx)
     if (playerIdx < 0 || playerIdx >= playerCount)
         return result;
 
-    IBotStrategy * strategy = botStrategies[playerIdx];
+    IBotStrategy * strategy = botStrategies[playerIdx].get();
     if (!strategy)
         return result;
 
@@ -430,7 +413,7 @@ BotActionResult GameEngine::executeBotJumpIn(int playerIdx)
     if (playerIdx < 0 || playerIdx >= playerCount) return result;
     if (state.jumpState != JUMP_AVAILABLE) return result;
 
-    IBotStrategy * strategy = botStrategies[playerIdx];
+    IBotStrategy * strategy = botStrategies[playerIdx].get();
     if (!strategy) return result;
 
     player * self = &players[playerIdx];

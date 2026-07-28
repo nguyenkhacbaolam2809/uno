@@ -170,7 +170,7 @@ bool HardBotStrategy::shouldJumpIn(player * self, const card & target)
     return false;
 }
 
-IBotStrategy * HardBotStrategy::clone() const
+std::unique_ptr<IBotStrategy> HardBotStrategy::clone() const
 {
-    return new HardBotStrategy(*this);
+    return std::make_unique<HardBotStrategy>(*this);
 }

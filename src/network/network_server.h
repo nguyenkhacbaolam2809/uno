@@ -3,10 +3,11 @@
 
 #include "game_engine.h"
 #include "packets.h"
+#include "net_platform.h"
 #include <string>
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <windows.h>
+#include <vector>
+#include <memory>
+#include <map>
 
 class NetworkServer
 {
@@ -21,26 +22,34 @@ public:
     bool isRunning() const { return running; }
 
 private:
+    struct ClientContext {
+        socket_t fd;
+        TcpReader reader;
+        TcpWriter writer;
+        bool connected;
+        ClientContext() : fd(INVALID_SOCK), connected(false) {}
+    };
+
     GameConfig config;
     bool vietRules;
     GameEngine engine;
 
-    SOCKET listenSocket;
-    SOCKET clientSockets[MAX_CLIENTS];
+    socket_t listenSocket;
+    std::map<int, ClientContext> clients;
     int clientCount;
     bool running;
 
-    static CRITICAL_SECTION clientsLock;
-    static bool csInitialized;
+    std::unique_ptr<EventLoop> loop;
 
-    bool initWinsock();
-    void cleanupWinsock();
-    bool sendPacket(SOCKET sock, const void * data, int len);
+    bool initPlatform();
+    void cleanupPlatform();
+    void onAccept();
+    void onRead(int clientId);
+    void onWrite(int clientId);
+    void onClose(int clientId);
     void broadcastSyncState();
-    void removeClient(int idx);
-    DWORD clientReceiveThread(int clientIdx);
-
-    static DWORD WINAPI clientThreadStatic(LPVOID param);
+    void removeClient(int clientId);
+    int nextClientId();
 };
 
 #endif

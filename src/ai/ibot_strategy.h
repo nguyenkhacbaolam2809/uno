@@ -3,6 +3,7 @@
 
 #include "card.h"
 #include "player.h"
+#include <memory>
 
 class IBotStrategy
 {
@@ -18,7 +19,7 @@ public:
 
     virtual bool shouldJumpIn(player * self, const card & target) = 0;
 
-    virtual IBotStrategy * clone() const = 0;
+    virtual std::unique_ptr<IBotStrategy> clone() const = 0;
 };
 
 #endif

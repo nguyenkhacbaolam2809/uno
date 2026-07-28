@@ -5,11 +5,9 @@
 #include "player.h"
 #include "game_engine.h"
 #include "packets.h"
+#include "net_platform.h"
 #include <string>
 #include <vector>
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <windows.h>
 
 struct SyncPlayer
 {
@@ -44,11 +42,11 @@ public:
     bool isConnected() const { return connected; }
 
 private:
-    SOCKET sock;
+    socket_t sock;
     bool connected;
+    TcpReader reader;
+    TcpWriter writer;
 
-    bool initWinsock();
-    void cleanupWinsock();
     bool sendRaw(const void * data, int len);
     bool readRaw(void * buffer, int len);
 };

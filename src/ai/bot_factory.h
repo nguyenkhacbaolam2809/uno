@@ -3,7 +3,8 @@
 
 #include "ibot_strategy.h"
 #include "player.h"
+#include <memory>
 
-IBotStrategy * createBotStrategy(BotDifficulty diff);
+std::unique_ptr<IBotStrategy> createBotStrategy(BotDifficulty diff);
 
 #endif

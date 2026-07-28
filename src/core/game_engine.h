@@ -8,6 +8,7 @@
 #include "rules.h"
 #include <string>
 #include <vector>
+#include <memory>
 
 class IBotStrategy;
 
@@ -89,7 +90,7 @@ public:
     void drawCard(int playerIdx);
     bool jumpIn(int playerIdx, int cardIdx);
     void callUno(int playerIdx);
-    void catchUno(int callerIdx, int targetIdx);
+    void catchUno(int /*callerIdx*/, int targetIdx);
 
     void nextTurn();
     void reshuffleDiscard();
@@ -104,7 +105,7 @@ private:
     deck mainDeck;
     deck discardPile;
     std::vector<player> players;
-    std::vector<IBotStrategy*> botStrategies;
+    std::vector<std::unique_ptr<IBotStrategy>> botStrategies;
     int playerCount;
 
     GameState state;
@@ -113,7 +114,6 @@ private:
     void dealCards();
     void chooseRandomStarter();
     void applyActionCard(const card & c);
-    void destroyStrategies();
 };
 
 #endif
