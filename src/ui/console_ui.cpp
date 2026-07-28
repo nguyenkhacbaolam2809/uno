@@ -94,6 +94,7 @@ int ConsoleUI::pickCardFromHand(player & p, const card & current)
         if (std::cin.fail())
         {
             std::cin.clear();
+            if (std::cin.peek() == EOF) return -1;
             std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
             std::cout << msg(config, 22) << std::endl;
             continue;
@@ -270,6 +271,8 @@ void ConsoleUI::handleBotTurn(GameEngine & engine, int playerIdx)
 void ConsoleUI::processGameLoop(GameEngine & engine)
 {
     engine.start();
+
+    if (engine.getPlayerCount() == 0) return;
 
     while (!engine.isGameOver())
     {

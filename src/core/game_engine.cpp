@@ -242,8 +242,8 @@ void GameEngine::reshuffleDiscard()
         if (mainDeck.get_size() == 0 && n > 0)
         {
             card c = discardPile.draw();
-            state.currentCard = c;
             discardPile.add_card(c);
+            mainDeck.add_card(c);
         }
         return;
     }
