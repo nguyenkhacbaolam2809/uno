@@ -8,7 +8,7 @@
 #include "network_client.h"
 #include <vector>
 #include <string>
-#include <functional>
+
 
 enum class PlayerAction {
     NONE,

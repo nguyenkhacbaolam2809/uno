@@ -4,5 +4,16 @@ build/
 *.out
 *.stackdump
 .vscode/
+.idea/
 .DS_Store
 Thumbs.db
+settings.cfg
+*.log
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.dll
+*.so
+*.dylib
+compile_commands.json

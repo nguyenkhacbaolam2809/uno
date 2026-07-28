@@ -5,6 +5,11 @@
 #include "rules.h"
 #include "logger.h"
 #include "input_manager.h"
+#include "debug_overlay.h"
+#include "audio_manager.h"
+#include "animation_manager.h"
+#include "particle_system.h"
+#include "settings.h"
 #include <cstdlib>
 
 // --- MenuState ---
@@ -114,6 +119,15 @@ static const char * colorToString(COLOR c)
     }
 }
 
+static SoundId cardSound(const card & c)
+{
+    if (c.number == CARD_SKIP) return SoundId::SKIP;
+    if (c.number == CARD_REVERSE) return SoundId::REVERSE;
+    if (c.number == CARD_WILD || c.number == CARD_WILD_DRAW_FOUR) return SoundId::WILD_CHOOSE;
+    if (c.number == CARD_DRAW_TWO) return SoundId::CARD_DRAW;
+    return SoundId::CARD_SLIDE;
+}
+
 void PlayingState::processTurnLocal()
 {
     int n = m_engine.getPlayerCount();
@@ -132,6 +146,11 @@ void PlayingState::processTurnLocal()
         }
 
         BotActionResult act = m_engine.executeBotTurn(currentTurn);
+        if (act.action == BOT_PLAY_CARD)
+        {
+            card c = p->peek(act.cardIdx);
+            AudioManager::instance().playSound(cardSound(c));
+        }
         m_engine.playCard(currentTurn, act.cardIdx, colorToString(act.chosenColor));
         m_engine.nextTurn();
     }
@@ -139,6 +158,7 @@ void PlayingState::processTurnLocal()
     {
         m_gameView->resetInteraction();
         bool turnDone = false;
+        bool drewCard = false;
 
         while (!turnDone && !m_engine.isGameOver())
         {
@@ -151,21 +171,45 @@ void PlayingState::processTurnLocal()
             {
                 if (m_engine.validatePlay(m_localPlayerId, r.cardIndex))
                 {
+                    card c = m_engine.getPlayer(m_localPlayerId)->peek(r.cardIndex);
+                    AudioManager::instance().playSound(cardSound(c));
                     m_engine.playCard(m_localPlayerId, r.cardIndex,
                                      colorToString(r.chosenColor));
+                    drewCard = false;
                     m_engine.nextTurn();
                     turnDone = true;
                 }
             }
             else if (r.action == PlayerAction::DRAW_CARD)
             {
+                if (!drewCard)
+                {
+                    AudioManager::instance().playSound(SoundId::CARD_DRAW);
+                    drewCard = true;
+                }
                 m_engine.drawCard(m_localPlayerId);
                 m_engine.nextTurn();
                 turnDone = true;
             }
+            else if (r.action == PlayerAction::SAY_UNO)
+            {
+                AudioManager::instance().playSound(SoundId::UNO_BUTTON);
+                m_engine.callUno(m_localPlayerId);
+            }
+            else if (r.action == PlayerAction::CATCH_UNO)
+            {
+                AudioManager::instance().playSound(SoundId::CATCH_UNO);
+                m_engine.catchUno(m_localPlayerId, r.targetId);
+            }
 
             EndDrawing();
         }
+    }
+
+    if (m_engine.isGameOver())
+    {
+        int winner = m_engine.getWinner();
+        AudioManager::instance().playSound(winner == m_localPlayerId ? SoundId::WIN : SoundId::LOSE);
     }
 }
 
@@ -193,6 +237,17 @@ AppStateMachine::AppStateMachine(const GameConfig & cfg) : m_config(cfg)
 {
     Logger::instance().setLevel(LogLevel::DEBUG);
     Logger::instance().enableFileOutput("gameuno.log");
+
+    Settings::instance().load();
+    float masterVol = Settings::instance().getFloat("audio.master", 1.0f);
+    float musicVol = Settings::instance().getFloat("audio.music", 0.8f);
+    float effectsVol = Settings::instance().getFloat("audio.effects", 1.0f);
+    AudioManager::instance().setMasterVolume(masterVol);
+    AudioManager::instance().setMusicVolume(musicVol);
+    AudioManager::instance().setEffectsVolume(effectsVol);
+    if (Settings::instance().getBool("audio.muted", false))
+        AudioManager::instance().setMuted(true);
+
     LOG_INFO("Game started");
 }
 
@@ -200,6 +255,13 @@ void AppStateMachine::run()
 {
     while (m_currentId != AppStateId::EXIT && !WindowShouldClose())
     {
+        AudioManager::instance().update();
+        AnimationManager::instance().update(GetFrameTime());
+        InputManager::instance().update();
+
+        if (IsKeyPressed(KEY_F3))
+            DebugOverlay::instance().toggle();
+
         createState(m_currentId);
 
         if (m_currentState)
@@ -207,12 +269,18 @@ void AppStateMachine::run()
             m_currentState->enter();
             AppStateId nextId = m_currentState->update();
 
-            // Only render for playing states (menu/gameover render internally)
             if (m_currentId == AppStateId::PLAYING_LOCAL)
             {
                 BeginDrawing();
                 ClearBackground((Color){ 30, 80, 40, 255 });
                 m_currentState->render();
+
+                DebugOverlay::instance().update(GetFrameTime());
+                DebugOverlay::instance().setInfo("State", "PlayingLocal");
+                DebugOverlay::instance().setInfo("Anims", TextFormat("%d", AnimationManager::instance().activeCount()));
+                DebugOverlay::instance().setInfo("Particles", TextFormat("%d", ParticleSystem::instance().activeCount()));
+                DebugOverlay::instance().render();
+
                 EndDrawing();
             }
 
@@ -224,6 +292,12 @@ void AppStateMachine::run()
             break;
         }
     }
+
+    Settings::instance().setFloat("audio.master", AudioManager::instance().masterVolume());
+    Settings::instance().setFloat("audio.music", AudioManager::instance().musicVolume());
+    Settings::instance().setFloat("audio.effects", AudioManager::instance().effectsVolume());
+    Settings::instance().setBool("audio.muted", AudioManager::instance().isMuted());
+    Settings::instance().save();
 }
 
 void AppStateMachine::transitionTo(AppStateId newId)
