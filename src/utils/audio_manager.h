@@ -34,13 +34,13 @@ public:
     void setMusicVolume(float vol);      // 0.0 - 1.0
     void setEffectsVolume(float vol);    // 0.0 - 1.0
 
-    float masterVolume() const { return m_masterVol; }
-    float musicVolume() const { return m_musicVol; }
-    float effectsVolume() const { return m_effectsVol; }
+    float masterVolume() const noexcept { return m_masterVol; }
+    float musicVolume() const noexcept { return m_musicVol; }
+    float effectsVolume() const noexcept { return m_effectsVol; }
 
-    bool isMuted() const { return m_muted; }
-    void setMuted(bool muted) { m_muted = muted; }
-    void toggleMute() { m_muted = !m_muted; }
+    bool isMuted() const noexcept { return m_muted; }
+    void setMuted(bool muted) { m_muted = muted; ::SetMasterVolume(muted ? 0 : m_masterVol); }
+    void toggleMute() { setMuted(!m_muted); }
 
     void update();
 

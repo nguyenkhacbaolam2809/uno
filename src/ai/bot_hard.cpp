@@ -69,27 +69,6 @@ int HardBotStrategy::findThreatBlock(player * self, const card & current,
     return -1;
 }
 
-int HardBotStrategy::findPointMinimization(player * self, const card & current) const
-{
-    for (int i = 0; i < self->get_size(); i++)
-    {
-        card c = self->peek(i);
-        if (!::canPlayCard(c, current)) continue;
-        if (::isSpecialCard(c))
-            return i;
-    }
-
-    for (int i = 0; i < self->get_size(); i++)
-    {
-        card c = self->peek(i);
-        if (!::canPlayCard(c, current)) continue;
-        if (::isActionCard(c))
-            return i;
-    }
-
-    return -1;
-}
-
 int HardBotStrategy::pickCard(player * self, const card & current,
                               int direction, int selfIdx,
                               const int * opponentSizes, int opponentCount,
@@ -130,7 +109,7 @@ int HardBotStrategy::pickCard(player * self, const card & current,
     return -1;
 }
 
-COLOR HardBotStrategy::pickColor(player * self)
+COLOR HardBotStrategy::pickColor(player * self) noexcept
 {
     int bestCount = -1;
     int bestCol = 1;
@@ -158,7 +137,7 @@ COLOR HardBotStrategy::pickColor(player * self)
     return static_cast<COLOR>(bestCol);
 }
 
-bool HardBotStrategy::shouldJumpIn(player * self, const card & target)
+bool HardBotStrategy::shouldJumpIn(player * self, const card & target) noexcept
 {
     for (int i = 0; i < self->get_size(); i++)
     {

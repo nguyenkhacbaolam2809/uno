@@ -1,8 +1,7 @@
 #include "deck.h"
 #include "rng.h"
-#include <iostream>
 
-deck::deck()
+deck::deck() noexcept
 {
 }
 
@@ -35,7 +34,7 @@ void deck::create()
     }
 }
 
-card deck::draw()
+card deck::draw() noexcept
 {
     if (cards.empty())
         return card();
@@ -60,12 +59,6 @@ void deck::quick_shuffle() noexcept
         cards[i] = cards[j];
         cards[j] = temp;
     }
-}
-
-void deck::print_deck() const
-{
-    for (std::size_t i = 0; i < cards.size(); i++)
-        std::cout << i << ": " << cards[i] << std::endl;
 }
 
 

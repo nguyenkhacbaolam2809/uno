@@ -71,19 +71,19 @@ public:
 
     GameState getState() const;
     const GameConfig & getConfig() const;
-    bool isGameOver() const;
+    bool isGameOver() const noexcept;
 
-    int getCurrentTurn() const;
-    int getDirection() const;
-    const card & getCurrentCard() const;
-    int getWinner() const;
-    int getDrawStack() const;
-    bool isForceDraw() const;
-    GamePhase getPhase() const;
+    int getCurrentTurn() const noexcept;
+    int getDirection() const noexcept;
+    const card & getCurrentCard() const noexcept;
+    int getWinner() const noexcept;
+    int getDrawStack() const noexcept;
+    bool isForceDraw() const noexcept;
+    GamePhase getPhase() const noexcept;
 
-    player * getPlayer(int idx);
-    const player * getPlayer(int idx) const;
-    int getPlayerCount() const;
+    player * getPlayer(int idx) noexcept;
+    const player * getPlayer(int idx) const noexcept;
+    int getPlayerCount() const noexcept;
 
     bool validatePlay(int playerIdx, int cardIdx) const;
     bool playCard(int playerIdx, int cardIdx, const std::string & chosenColor);

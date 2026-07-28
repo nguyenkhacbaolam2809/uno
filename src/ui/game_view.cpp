@@ -48,7 +48,7 @@ void GameView::showMessage(const std::string & msg, float duration)
     overlayTimer = duration;
 }
 
-bool GameView::isReady() const
+bool GameView::isReady() const noexcept
 {
     return true;
 }

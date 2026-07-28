@@ -1,6 +1,6 @@
 #include "particle_system.h"
+#include "rng.h"
 #include <cmath>
-#include <cstdlib>
 #include <algorithm>
 
 ParticleSystem & ParticleSystem::instance()
@@ -50,10 +50,10 @@ void ParticleSystem::burst(const ParticleBurstConfig & cfg)
 {
     for (int i = 0; i < cfg.count; i++)
     {
-        float angle = (float)(rand() % 10000) / 10000.0f * cfg.spread * DEG2RAD;
-        float speed = cfg.speedMin + (float)(rand() % 10000) / 10000.0f * (cfg.speedMax - cfg.speedMin);
-        float life = cfg.lifeMin + (float)(rand() % 10000) / 10000.0f * (cfg.lifeMax - cfg.lifeMin);
-        float size = cfg.sizeMin + (float)(rand() % 10000) / 10000.0f * (cfg.sizeMax - cfg.sizeMin);
+        float angle = (float)randomInt(0, 9999) / 10000.0f * cfg.spread * DEG2RAD;
+        float speed = cfg.speedMin + (float)randomInt(0, 9999) / 10000.0f * (cfg.speedMax - cfg.speedMin);
+        float life = cfg.lifeMin + (float)randomInt(0, 9999) / 10000.0f * (cfg.lifeMax - cfg.lifeMin);
+        float size = cfg.sizeMin + (float)randomInt(0, 9999) / 10000.0f * (cfg.sizeMax - cfg.sizeMin);
         Particle p;
         p.pos = cfg.origin;
         p.vel = { std::cos(angle) * speed, std::sin(angle) * speed };
@@ -83,5 +83,5 @@ void ParticleSystem::emit(Vector2 pos, Vector2 vel, Color color, float life, flo
     spawn(p);
 }
 
-int ParticleSystem::activeCount() const { return (int)m_particles.size(); }
+int ParticleSystem::activeCount() const noexcept { return (int)m_particles.size(); }
 void ParticleSystem::clear() { m_particles.clear(); }

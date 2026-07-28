@@ -27,7 +27,7 @@ int MediumBotStrategy::pickCard(player * self, const card & current,
     for (int i = 0; i < self->get_size(); i++)
     {
         card c = self->peek(i);
-        if (c.number == 13)
+        if (c.number == CARD_WILD || c.number == CARD_WILD_DRAW_FOUR)
             return i;
     }
 
@@ -41,7 +41,7 @@ int MediumBotStrategy::pickCard(player * self, const card & current,
     return -1;
 }
 
-COLOR MediumBotStrategy::pickColor(player * self)
+COLOR MediumBotStrategy::pickColor(player * self) noexcept
 {
     int counts[4] = {0};
     for (int i = 0; i < self->get_size(); i++)
@@ -64,7 +64,7 @@ COLOR MediumBotStrategy::pickColor(player * self)
     return static_cast<COLOR>(bestCol);
 }
 
-bool MediumBotStrategy::shouldJumpIn(player * self, const card & target)
+bool MediumBotStrategy::shouldJumpIn(player * self, const card & target) noexcept
 {
     for (int i = 0; i < self->get_size(); i++)
     {

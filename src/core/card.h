@@ -1,8 +1,6 @@
 #ifndef CARD_H
 #define CARD_H
 
-#include <ostream>
-
 enum COLOR : unsigned char { wild, red, green, blue, yellow };
 
 constexpr int CARD_DRAW_TWO = 10;
@@ -20,13 +18,10 @@ public:
     int number;
     COLOR color;
 
-    bool operator==(card const & other) const;
-    bool operator!=(card const & other) const;
-
-    card();
-    card(int num, COLOR col);
+    card() noexcept;
+    card(int num, COLOR col) noexcept;
+    bool operator==(card const & other) const noexcept;
+    bool operator!=(card const & other) const noexcept;
 };
-
-std::ostream & operator<<(std::ostream & out, card const & temp_card);
 
 #endif

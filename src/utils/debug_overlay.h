@@ -11,7 +11,7 @@ public:
     static DebugOverlay & instance();
 
     void toggle();
-    bool isVisible() const { return m_visible; }
+    bool isVisible() const noexcept { return m_visible; }
 
     void update(float dt);
     void render();

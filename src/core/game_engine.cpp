@@ -122,17 +122,17 @@ void GameEngine::reset()
 
 GameState GameEngine::getState() const { return state; }
 const GameConfig & GameEngine::getConfig() const { return config; }
-bool GameEngine::isGameOver() const { return state.winner >= 0 || state.phase == PHASE_GAME_OVER; }
-int GameEngine::getCurrentTurn() const { return state.turn; }
-int GameEngine::getDirection() const { return state.direction; }
-const card & GameEngine::getCurrentCard() const { return state.currentCard; }
-int GameEngine::getWinner() const { return state.winner; }
-int GameEngine::getDrawStack() const { return state.drawStack; }
-bool GameEngine::isForceDraw() const { return state.forceDraw; }
-GamePhase GameEngine::getPhase() const { return state.phase; }
-player * GameEngine::getPlayer(int idx) { return &players[idx]; }
-const player * GameEngine::getPlayer(int idx) const { return &players[idx]; }
-int GameEngine::getPlayerCount() const { return playerCount; }
+bool GameEngine::isGameOver() const noexcept { return state.winner >= 0 || state.phase == PHASE_GAME_OVER; }
+int GameEngine::getCurrentTurn() const noexcept { return state.turn; }
+int GameEngine::getDirection() const noexcept { return state.direction; }
+const card & GameEngine::getCurrentCard() const noexcept { return state.currentCard; }
+int GameEngine::getWinner() const noexcept { return state.winner; }
+int GameEngine::getDrawStack() const noexcept { return state.drawStack; }
+bool GameEngine::isForceDraw() const noexcept { return state.forceDraw; }
+GamePhase GameEngine::getPhase() const noexcept { return state.phase; }
+player * GameEngine::getPlayer(int idx) noexcept { return &players[idx]; }
+const player * GameEngine::getPlayer(int idx) const noexcept { return &players[idx]; }
+int GameEngine::getPlayerCount() const noexcept { return playerCount; }
 
 bool GameEngine::validatePlay(int playerIdx, int cardIdx) const
 {
@@ -222,15 +222,7 @@ void GameEngine::reshuffleDiscard()
 {
     int n = discardPile.get_size();
     if (n <= 1)
-    {
-        if (mainDeck.get_size() == 0 && n > 0)
-        {
-            card c = discardPile.draw();
-            discardPile.add_card(c);
-            mainDeck.add_card(c);
-        }
         return;
-    }
 
     std::vector<card> tmp;
     tmp.reserve(n);

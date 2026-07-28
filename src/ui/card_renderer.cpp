@@ -20,11 +20,7 @@ static const char * cardLabel(const card & c)
         case CARD_WILD:           return "W";
         case CARD_WILD_DRAW_FOUR: return "+4";
         default:
-        {
-            static char buf[4];
-            std::snprintf(buf, sizeof(buf), "%d", c.number);
-            return buf;
-        }
+            return TextFormat("%d", c.number);
     }
 }
 

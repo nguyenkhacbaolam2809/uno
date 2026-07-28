@@ -30,8 +30,8 @@ class Animation {
 public:
     virtual ~Animation() = default;
     virtual void update(float dt) = 0;
-    virtual bool isFinished() const = 0;
-    virtual AnimState state() const { return m_state; }
+    virtual bool isFinished() const noexcept = 0;
+    virtual AnimState state() const noexcept { return m_state; }
     virtual void reset() { m_state = AnimState::PENDING; m_elapsed = 0; }
 
 protected:
@@ -45,56 +45,64 @@ class FloatAnim : public Animation {
 public:
     FloatAnim(float start, float end, float duration, EaseType ease = EaseType::EASE_OUT_QUAD);
     void update(float dt) override;
-    bool isFinished() const override { return m_state == AnimState::FINISHED; }
-    float value() const { return m_current; }
+    bool isFinished() const noexcept override { return m_state == AnimState::FINISHED; }
+    float value() const noexcept { return m_current; }
     void onFinish(std::function<void()> cb) { m_onFinish = std::move(cb); }
+    void onUpdate(std::function<void(float)> cb) { m_onUpdate = std::move(cb); }
 
 private:
     float m_start, m_end, m_current;
     std::function<void()> m_onFinish;
+    std::function<void(float)> m_onUpdate;
 };
 
 class Vec2Anim : public Animation {
 public:
     Vec2Anim(Vector2 start, Vector2 end, float duration, EaseType ease = EaseType::EASE_OUT_QUAD);
     void update(float dt) override;
-    bool isFinished() const override { return m_state == AnimState::FINISHED; }
-    Vector2 value() const { return m_current; }
+    bool isFinished() const noexcept override { return m_state == AnimState::FINISHED; }
+    Vector2 value() const noexcept { return m_current; }
     void onFinish(std::function<void()> cb) { m_onFinish = std::move(cb); }
+    void onUpdate(std::function<void(Vector2)> cb) { m_onUpdate = std::move(cb); }
 
 private:
     Vector2 m_current, m_start, m_end;
     std::function<void()> m_onFinish;
+    std::function<void(Vector2)> m_onUpdate;
 };
 
 class ColorAnim : public Animation {
 public:
     ColorAnim(Color start, Color end, float duration, EaseType ease = EaseType::LINEAR);
     void update(float dt) override;
-    bool isFinished() const override { return m_state == AnimState::FINISHED; }
-    Color value() const { return m_current; }
+    bool isFinished() const noexcept override { return m_state == AnimState::FINISHED; }
+    Color value() const noexcept { return m_current; }
+    void onUpdate(std::function<void(Color)> cb) { m_onUpdate = std::move(cb); }
 
 private:
     Color m_current, m_start, m_end;
+    std::function<void(Color)> m_onUpdate;
 };
 
 class ShakeAnim : public Animation {
 public:
     ShakeAnim(float intensity, float duration);
     void update(float dt) override;
-    bool isFinished() const override { return m_state == AnimState::FINISHED; }
-    Vector2 offset() const { return m_offset; }
+    bool isFinished() const noexcept override { return m_state == AnimState::FINISHED; }
+    Vector2 offset() const noexcept { return m_offset; }
+    void onUpdate(std::function<void(Vector2)> cb) { m_onUpdate = std::move(cb); }
 
 private:
     float m_intensity;
     Vector2 m_offset;
+    std::function<void(Vector2)> m_onUpdate;
 };
 
 class DelayAnim : public Animation {
 public:
     explicit DelayAnim(float duration);
     void update(float dt) override;
-    bool isFinished() const override { return m_state == AnimState::FINISHED; }
+    bool isFinished() const noexcept override { return m_state == AnimState::FINISHED; }
     void onFinish(std::function<void()> cb) { m_onFinish = std::move(cb); }
 
 private:
@@ -105,7 +113,7 @@ class SequenceAnim : public Animation {
 public:
     void add(std::unique_ptr<Animation> anim);
     void update(float dt) override;
-    bool isFinished() const override;
+    bool isFinished() const noexcept override;
     void reset() override;
 
 private:
@@ -117,7 +125,7 @@ class ParallelAnim : public Animation {
 public:
     void add(std::unique_ptr<Animation> anim);
     void update(float dt) override;
-    bool isFinished() const override;
+    bool isFinished() const noexcept override;
     void reset() override;
 
 private:
@@ -133,7 +141,7 @@ public:
     int add(std::unique_ptr<Animation> anim);
     void remove(int id);
     void clear();
-    int activeCount() const;
+    int activeCount() const noexcept;
 
     // Convenience helpers
     int animateFloat(float start, float end, float duration,

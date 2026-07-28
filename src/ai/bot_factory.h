@@ -5,6 +5,6 @@
 #include "player.h"
 #include <memory>
 
-std::unique_ptr<IBotStrategy> createBotStrategy(BotDifficulty diff);
+std::unique_ptr<IBotStrategy> createBotStrategy(BotDifficulty diff) noexcept;
 
 #endif

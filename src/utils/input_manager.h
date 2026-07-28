@@ -26,21 +26,21 @@ public:
 
     void update();
 
-    bool isKeyDown(int key) const;
-    bool isKeyPressed(int key) const;
-    bool isKeyReleased(int key) const;
-    bool isKeyRepeated(int key) const;
+    bool isKeyDown(int key) const noexcept;
+    bool isKeyPressed(int key) const noexcept;
+    bool isKeyReleased(int key) const noexcept;
+    bool isKeyRepeated(int key) const noexcept;
 
-    bool isMouseButtonDown(int btn) const;
-    bool isMouseButtonPressed(int btn) const;
-    bool isMouseButtonReleased(int btn) const;
-    bool isMouseDoubleClicked(int btn) const;
+    bool isMouseButtonDown(int btn) const noexcept;
+    bool isMouseButtonPressed(int btn) const noexcept;
+    bool isMouseButtonReleased(int btn) const noexcept;
+    bool isMouseDoubleClicked(int btn) const noexcept;
 
-    Vector2 mousePosition() const { return m_mousePos; }
-    Vector2 mouseDelta() const { return m_mouseDelta; }
-    float mouseWheel() const { return m_mouseWheel; }
+    Vector2 mousePosition() const noexcept { return m_mousePos; }
+    Vector2 mouseDelta() const noexcept { return m_mouseDelta; }
+    float mouseWheel() const noexcept { return m_mouseWheel; }
 
-    bool isLongPress(float duration = 0.5f) const;
+    bool isLongPress(float duration = 0.5f) const noexcept;
 
     void onKeyPressed(int key, std::function<void()> callback);
     void onKeyReleased(int key, std::function<void()> callback);

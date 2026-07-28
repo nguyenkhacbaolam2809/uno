@@ -48,6 +48,9 @@ PlayingState::~PlayingState() = default;
 
 void PlayingState::enter()
 {
+    if (m_entered) return;
+    m_entered = true;
+
     int total;
     if (m_lobby.numBots > 0 || m_lobby.numHumans > 1)
         total = std::max(m_lobby.numHumans + m_lobby.numBots, 2);
@@ -97,7 +100,10 @@ AppStateId PlayingState::update()
     if (m_engine.isGameOver())
     {
         LOG_INFO("Game over, winner: %d", m_engine.getWinner());
-        return AppStateId::GAME_OVER;
+        int winner = m_engine.getWinner();
+        AudioManager::instance().playSound(winner == m_localPlayerId ? SoundId::WIN : SoundId::LOSE);
+        m_gameView->showGameOver(m_engine);
+        return AppStateId::EXIT;
     }
 
     processTurnLocal();
@@ -210,28 +216,8 @@ void PlayingState::processTurnLocal()
 
     if (m_engine.isGameOver())
     {
-        int winner = m_engine.getWinner();
-        AudioManager::instance().playSound(winner == m_localPlayerId ? SoundId::WIN : SoundId::LOSE);
+        // sound played in update()
     }
-}
-
-// --- GameOverState ---
-GameOverState::GameOverState(GameEngine & engine, std::unique_ptr<GameView> view)
-    : m_engine(engine), m_view(std::move(view))
-{
-}
-
-AppStateId GameOverState::update()
-{
-    if (m_done) return AppStateId::EXIT;
-    m_view->showGameOver(m_engine);
-    m_done = true;
-    return AppStateId::EXIT;
-}
-
-void GameOverState::render()
-{
-    // GameOver handled internally by showGameOver loop
 }
 
 // --- AppStateMachine ---
@@ -310,6 +296,9 @@ void AppStateMachine::transitionTo(AppStateId newId)
 
 void AppStateMachine::createState(AppStateId id)
 {
+    if (m_currentState && m_currentState->id() == id)
+        return;
+
     switch (id)
     {
         case AppStateId::MENU:
@@ -318,9 +307,6 @@ void AppStateMachine::createState(AppStateId id)
         case AppStateId::LOBBY:
         {
             // Quick transition through lobby for now (inline config)
-            m_lobbyConfig.numHumans = 1;
-            m_lobbyConfig.numBots = 1;
-            m_lobbyConfig.botDifficulty = 1;
             m_currentId = AppStateId::PLAYING_LOCAL;
             createState(AppStateId::PLAYING_LOCAL);
             break;
@@ -329,7 +315,8 @@ void AppStateMachine::createState(AppStateId id)
             m_currentState = std::make_unique<PlayingState>(m_config, m_lobbyConfig);
             break;
         case AppStateId::GAME_OVER:
-            // Handled via PlayingState -> GameOverState transition
+            // Handled via PlayingState -> showGameOver
+            m_currentState = nullptr;
             break;
         default:
             m_currentState = nullptr;

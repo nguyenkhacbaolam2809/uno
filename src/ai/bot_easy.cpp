@@ -13,12 +13,12 @@ int EasyBotStrategy::pickCard(player * self, const card & current,
     return -1;
 }
 
-COLOR EasyBotStrategy::pickColor(player *)
+COLOR EasyBotStrategy::pickColor(player *) noexcept
 {
     return static_cast<COLOR>(randomInt(1, 4));
 }
 
-bool EasyBotStrategy::shouldJumpIn(player * self, const card & target)
+bool EasyBotStrategy::shouldJumpIn(player * self, const card & target) noexcept
 {
     for (int i = 0; i < self->get_size(); i++)
     {

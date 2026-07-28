@@ -119,7 +119,10 @@ void GameView::renderColorPicker()
         if (CheckCollisionPointRec(GetMousePosition(), r) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
         {
             pickedColor = colors[i].col;
+            pendingResult.action = PlayerAction::PLAY_CARD;
+            pendingResult.cardIndex = selectedCard;
             pendingResult.chosenColor = pickedColor;
+            needsColorPick = false;
         }
     }
 }

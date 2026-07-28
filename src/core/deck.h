@@ -6,14 +6,13 @@
 
 class deck final {
 public:
-    deck();
+    deck() noexcept;
 
     void create();
     void quick_shuffle() noexcept;
-    card draw();
+    card draw() noexcept;
     int add_card(const card & c) noexcept;
     int get_size() const noexcept { return static_cast<int>(cards.size()); }
-    void print_deck() const;
 
 private:
     std::vector<card> cards;

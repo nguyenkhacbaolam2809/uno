@@ -15,9 +15,9 @@ public:
                  const int * opponentSizes, int opponentCount,
                  int drawStack) override;
 
-    COLOR pickColor(player * self) override;
+    COLOR pickColor(player * self) noexcept override;
 
-    bool shouldJumpIn(player * self, const card & target) override;
+    bool shouldJumpIn(player * self, const card & target) noexcept override;
 
     std::unique_ptr<IBotStrategy> clone() const override;
 
@@ -32,7 +32,7 @@ private:
     int findThreatBlock(player * self, const card & current,
                         int direction, int selfIdx,
                         const int * opponentSizes, int opponentCount) const;
-    int findPointMinimization(player * self, const card & current) const;
+
 };
 
 #endif

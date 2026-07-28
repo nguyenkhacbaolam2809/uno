@@ -37,7 +37,7 @@ public:
     void burst(const ParticleBurstConfig & cfg);
     void emit(Vector2 pos, Vector2 vel, Color color, float life, float size);
 
-    int activeCount() const;
+    int activeCount() const noexcept;
     void clear();
 
 private:

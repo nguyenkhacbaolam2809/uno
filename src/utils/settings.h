@@ -5,6 +5,7 @@
 #include <fstream>
 #include <unordered_map>
 #include <algorithm>
+#include <stdexcept>
 
 class Settings {
 public:
@@ -70,14 +71,14 @@ inline int Settings::getInt(const std::string & key, int fallback) const
 {
     auto it = m_data.find(key);
     if (it == m_data.end()) return fallback;
-    return std::stoi(it->second);
+    try { return std::stoi(it->second); } catch (...) { return fallback; }
 }
 
 inline float Settings::getFloat(const std::string & key, float fallback) const
 {
     auto it = m_data.find(key);
     if (it == m_data.end()) return fallback;
-    return std::stof(it->second);
+    try { return std::stof(it->second); } catch (...) { return fallback; }
 }
 
 inline bool Settings::getBool(const std::string & key, bool fallback) const
@@ -126,6 +127,7 @@ inline std::string Settings::escape(const std::string & s) const
     {
         if (c == '\\') r += "\\\\";
         else if (c == '\n') r += "\\n";
+        else if (c == '=') r += "\\=";
         else r += c;
     }
     return r;
@@ -141,6 +143,7 @@ inline std::string Settings::unescape(const std::string & s) const
         {
             if (s[i + 1] == 'n') r += '\n';
             else if (s[i + 1] == '\\') r += '\\';
+            else if (s[i + 1] == '=') r += '=';
             else { r += s[i]; r += s[i + 1]; }
             i++;
         }

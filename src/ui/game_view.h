@@ -41,7 +41,7 @@ public:
 
     void showMessage(const std::string & msg, float duration = 2.0f);
     void showGameOver(const GameEngine & engine);
-    bool isReady() const;
+    bool isReady() const noexcept;
 
     void resetInteraction();
 

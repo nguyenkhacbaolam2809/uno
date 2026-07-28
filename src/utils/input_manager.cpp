@@ -87,26 +87,26 @@ void InputManager::update()
     }
 }
 
-bool InputManager::isKeyDown(int key) const { return IsKeyDown(key); }
-bool InputManager::isKeyPressed(int key) const { return IsKeyPressed(key); }
-bool InputManager::isKeyReleased(int key) const { return IsKeyReleased(key); }
-bool InputManager::isKeyRepeated(int key) const { return IsKeyPressed(key); }
+bool InputManager::isKeyDown(int key) const noexcept { return IsKeyDown(key); }
+bool InputManager::isKeyPressed(int key) const noexcept { return IsKeyPressed(key); }
+bool InputManager::isKeyReleased(int key) const noexcept { return IsKeyReleased(key); }
+bool InputManager::isKeyRepeated(int key) const noexcept { return IsKeyPressedRepeat(key); }
 
-bool InputManager::isMouseButtonDown(int btn) const { return m_currMouse[btn]; }
-bool InputManager::isMouseButtonPressed(int btn) const
+bool InputManager::isMouseButtonDown(int btn) const noexcept { return m_currMouse[btn]; }
+bool InputManager::isMouseButtonPressed(int btn) const noexcept
 {
     return m_currMouse[btn] && !m_prevMouse[btn];
 }
-bool InputManager::isMouseButtonReleased(int btn) const
+bool InputManager::isMouseButtonReleased(int btn) const noexcept
 {
     return !m_currMouse[btn] && m_prevMouse[btn];
 }
-bool InputManager::isMouseDoubleClicked(int btn) const
+bool InputManager::isMouseDoubleClicked(int btn) const noexcept
 {
     return m_clickCount[btn] >= 2;
 }
 
-bool InputManager::isLongPress(float duration) const
+bool InputManager::isLongPress(float duration) const noexcept
 {
     return m_currMouse[0] && (GetTime() - m_mousePressTime[0]) >= duration;
 }

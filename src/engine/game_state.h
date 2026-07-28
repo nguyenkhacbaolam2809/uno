@@ -12,10 +12,7 @@ enum class AppStateId {
     MENU,
     LOBBY,
     PLAYING_LOCAL,
-    PLAYING_NET_SERVER,
-    PLAYING_NET_CLIENT,
     GAME_OVER,
-    RECONNECT,
     EXIT
 };
 
@@ -69,21 +66,9 @@ private:
     GameEngine m_engine;
     std::unique_ptr<GameView> m_gameView;
     int m_localPlayerId{0};
+    bool m_entered{false};
 
     void processTurnLocal();
-};
-
-class GameOverState : public IAppState {
-public:
-    explicit GameOverState(GameEngine & engine, std::unique_ptr<GameView> view);
-    AppStateId update() override;
-    void render() override;
-    AppStateId id() const override { return AppStateId::GAME_OVER; }
-
-private:
-    GameEngine & m_engine;
-    std::unique_ptr<GameView> m_view;
-    bool m_done{false};
 };
 
 class AppStateMachine {

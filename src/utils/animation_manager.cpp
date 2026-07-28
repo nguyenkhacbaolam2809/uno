@@ -54,6 +54,7 @@ void FloatAnim::update(float dt)
     m_elapsed += dt;
     float t = std::min(m_elapsed / m_duration, 1.0f);
     m_current = m_start + (m_end - m_start) * easeApply(m_ease, t);
+    if (m_onUpdate) m_onUpdate(m_current);
     if (t >= 1.0f)
     {
         m_state = AnimState::FINISHED;
@@ -77,6 +78,7 @@ void Vec2Anim::update(float dt)
     float e = easeApply(m_ease, t);
     m_current.x = m_start.x + (m_end.x - m_start.x) * e;
     m_current.y = m_start.y + (m_end.y - m_start.y) * e;
+    if (m_onUpdate) m_onUpdate(m_current);
     if (t >= 1.0f)
     {
         m_state = AnimState::FINISHED;
@@ -102,6 +104,7 @@ void ColorAnim::update(float dt)
     m_current.g = (unsigned char)(m_start.g + (m_end.g - m_start.g) * e);
     m_current.b = (unsigned char)(m_start.b + (m_end.b - m_start.b) * e);
     m_current.a = (unsigned char)(m_start.a + (m_end.a - m_start.a) * e);
+    if (m_onUpdate) m_onUpdate(m_current);
     if (t >= 1.0f) m_state = AnimState::FINISHED;
 }
 
@@ -121,6 +124,7 @@ void ShakeAnim::update(float dt)
     float angle = (float)(randomInt(0, 627)) / 100.0f;
     m_offset.x = std::cos(angle) * m_intensity * decay;
     m_offset.y = std::sin(angle) * m_intensity * decay;
+    if (m_onUpdate) m_onUpdate(m_offset);
     if (t >= 1.0f)
     {
         m_offset = { 0, 0 };
@@ -166,7 +170,7 @@ void SequenceAnim::update(float dt)
         m_currentIdx++;
 }
 
-bool SequenceAnim::isFinished() const
+bool SequenceAnim::isFinished() const noexcept
 {
     return m_currentIdx >= (int)m_anims.size();
 }
@@ -201,7 +205,7 @@ void ParallelAnim::update(float dt)
     if (allDone) m_state = AnimState::FINISHED;
 }
 
-bool ParallelAnim::isFinished() const
+bool ParallelAnim::isFinished() const noexcept
 {
     for (auto & a : m_anims)
         if (!a->isFinished()) return false;
@@ -252,14 +256,14 @@ void AnimationManager::remove(int id)
 }
 
 void AnimationManager::clear() { m_animations.clear(); }
-int AnimationManager::activeCount() const { return (int)m_animations.size(); }
+int AnimationManager::activeCount() const noexcept { return (int)m_animations.size(); }
 
 int AnimationManager::animateFloat(float start, float end, float duration,
     std::function<void(float)> onUpdate, std::function<void()> onFinish, EaseType ease)
 {
     auto anim = std::make_unique<FloatAnim>(start, end, duration, ease);
-    anim->onFinish([onUpdate, onFinish, animPtr = anim.get()]() {
-        onUpdate(animPtr->value());
+    anim->onUpdate(std::move(onUpdate));
+    anim->onFinish([onFinish]() {
         if (onFinish) onFinish();
     });
     int id = m_nextId++;
@@ -271,8 +275,8 @@ int AnimationManager::animateVec2(Vector2 start, Vector2 end, float duration,
     std::function<void(Vector2)> onUpdate, std::function<void()> onFinish, EaseType ease)
 {
     auto anim = std::make_unique<Vec2Anim>(start, end, duration, ease);
-    anim->onFinish([onUpdate, onFinish, animPtr = anim.get()]() {
-        onUpdate(animPtr->value());
+    anim->onUpdate(std::move(onUpdate));
+    anim->onFinish([onFinish]() {
         if (onFinish) onFinish();
     });
     int id = m_nextId++;
@@ -283,10 +287,9 @@ int AnimationManager::animateVec2(Vector2 start, Vector2 end, float duration,
 int AnimationManager::animateColor(Color start, Color end, float duration,
     std::function<void(Color)> onUpdate, EaseType ease)
 {
-    (void)onUpdate;
     auto anim = std::make_unique<ColorAnim>(start, end, duration, ease);
+    anim->onUpdate(std::move(onUpdate));
     int id = m_nextId++;
-    // Poll-based: caller reads value each frame
     m_animations.push_back({ id, std::move(anim) });
     return id;
 }
@@ -303,8 +306,8 @@ int AnimationManager::delay(float duration, std::function<void()> onFinish)
 int AnimationManager::shake(float intensity, float duration,
     std::function<void(Vector2)> onUpdate)
 {
-    (void)onUpdate;
     auto anim = std::make_unique<ShakeAnim>(intensity, duration);
+    anim->onUpdate(std::move(onUpdate));
     int id = m_nextId++;
     m_animations.push_back({ id, std::move(anim) });
     return id;

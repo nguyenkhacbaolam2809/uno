@@ -9,7 +9,7 @@ inline std::mt19937 & rng()
     return instance;
 }
 
-inline int randomInt(int min, int max)
+inline int randomInt(int min, int max) noexcept
 {
     std::uniform_int_distribution<int> dist(min, max);
     return dist(rng());

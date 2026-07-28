@@ -3,7 +3,7 @@
 #include "bot_medium.h"
 #include "bot_hard.h"
 
-std::unique_ptr<IBotStrategy> createBotStrategy(BotDifficulty diff)
+std::unique_ptr<IBotStrategy> createBotStrategy(BotDifficulty diff) noexcept
 {
     switch (diff)
     {
