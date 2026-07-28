@@ -3,16 +3,17 @@
 
 #include "game_engine.h"
 #include "packets.h"
-#include "net_platform.h"
+#include "tcp_buffer.h"
 #include <string>
 #include <vector>
 #include <memory>
 #include <map>
+#include <sys/epoll.h>
 
 class NetworkServer
 {
 public:
-    NetworkServer(const GameConfig & cfg, bool vietRules);
+    NetworkServer(const GameConfig & cfg, bool viet);
     ~NetworkServer();
 
     bool start(int port = DEFAULT_PORT);
@@ -22,33 +23,30 @@ public:
     bool isRunning() const { return running; }
 
 private:
-    struct ClientContext {
-        socket_t fd;
-        TcpReader reader;
-        TcpWriter writer;
+    struct Client {
+        int fd;
+        RecvBuffer recvBuf;
+        SendBuffer sendBuf;
         bool connected;
-        ClientContext() : fd(INVALID_SOCK), connected(false) {}
+        Client() : fd(-1), connected(false) {}
     };
 
     GameConfig config;
     bool vietRules;
     GameEngine engine;
 
-    socket_t listenSocket;
-    std::map<int, ClientContext> clients;
+    int listenFd;
+    int epollFd;
+    std::map<int, Client> clients;
     int clientCount;
     bool running;
 
-    std::unique_ptr<EventLoop> loop;
-
-    bool initPlatform();
-    void cleanupPlatform();
-    void onAccept();
-    void onRead(int clientId);
-    void onWrite(int clientId);
-    void onClose(int clientId);
+    bool setNonBlocking(int fd);
+    void handleAccept();
+    void handleRead(int clientId);
+    void handleWrite(int clientId);
+    void handleClose(int clientId);
     void broadcastSyncState();
-    void removeClient(int clientId);
     int nextClientId();
 };
 

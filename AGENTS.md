@@ -4,8 +4,6 @@
 - Core data types: `card.h/cpp`, `deck.h/cpp`, `player.h/cpp`
 - Game configuration: `config.h/cpp`
 - Game logic: `rules.h/cpp`
-- UI layer: `console_ui.h/cpp` with Vietnamese/English support
-- Makefile build system
 - Singleplayer, local multiplayer, mixed (human+bot), LAN modes
 
 ## Phase 2 - AI Bot Engine with Strategy Pattern ✅
@@ -15,42 +13,45 @@
 - `bot_hard.h/cpp` - Hard: strategic color counting, card value optimization, wild preference
 - `bot_factory.h/cpp` - Factory to create bot strategies by difficulty
 - `game_engine.h/cpp` - Updated with `executeBotTurn()`, `createBot()`, `BotActionResult`
-- Removed old `bot_strategy.h/cpp`
-- Makefile updated for new file structure
 
 ## Phase 3 - Network Layer ✅
 - `packets.h` - Packet types (PLAY_CARD, DRAW, JUMP_IN, CALL_UNO, CATCH_UNO, SYNC_STATE)
-- `network_server.h/cpp` - TCP server with Winsock2:
-  - Listen for connections, manage up to 4 clients
-  - Authoritative GameEngine per session
-  - Client receive threads with thread-safe sync state broadcast
-  - Full game state serialization (players, hands, current card, etc.)
-- `network_client.h/cpp` - TCP client:
-  - Connect to remote server
-  - Send actions (play card, draw, jump in, uno, catch uno)
-  - Receive and deserialize game state into SyncState struct
-- `config.cpp` - LAN menu messages (host/join prompts, IP/port input)
-- `console_ui.h/cpp` - Split modeLan into `modeLanServer()` (host) and `modeLanClient()` (join)
-- `Makefile` - Added network objects + `-lws2_32` for Winsock2 linking
+- `tcp_buffer.h` - Per-client send/recv ring buffers with length-prefixed TCP framing
+- `network_server.h/cpp` - epoll-based authoritative server (Linux only, non-blocking I/O)
+- `network_client.h/cpp` - epoll-based async client (Linux only, non-blocking I/O)
 
 ## Phase 4 - Testing & Polish ✅
 - Comprehensive unit tests: 80 tests covering card, deck, player, rules, game engine, and bots
-- Fixed `addPlayer` bug: `init()` now creates players with empty names so `addPlayer` can replace them
-- Fixed `isLegalLastCard`: skip (11) and reverse (12) are now correctly allowed as last cards
-- Fixed `isLegalLastCard`: only draw2 (10), wild (13), wild draw4 (14) are forbidden
-- Fixed Skip/Reverse double-advance bug in `applyActionCard`
-- Fixed `nextTurn()` loop safety check
-- Fixed `chooseRandomStarter()` infinite loop protection
-- Fixed Fisher-Yates shuffle off-by-one in `quick_shuffle()`
-- Removed `srand()` from shuffle loops (seeded once in `main()`)
-- Fixed `reshuffleDiscard()` empty deck edge case
-- Fixed `peek()` bounds checking in `player.cpp`
-- Fixed `waitForEnter()` not clearing cin fail-bit
-- Fixed `pickCardFromHand()` and `pickColor()` infinite loops on non-numeric input
-- Fixed force-draw `peek(-1)` crash in `handleHumanTurn()`
-- Fixed main menu `cin` failure handling
-- Fixed `callUno()` stub implementation
-- Fixed `network_server.cpp`: stack buffer overflow, packet body validation, player slot bug, thread cleanup, critical section lifecycle, code deduplication
-- Removed old `test_legacy.cpp` (preprocessor macro based, only 1 test path compiled)
-- Added `test_all.cpp` with 80 passing tests
-- Added `test_all` target to Makefile
+- Various bug fixes and edge case handling
+- All 80 unit tests pass
+
+## Phase 5 - Platform-Abstracted Network Layer ✅
+- `net_platform.h` - Abstract `EventLoop` interface (epoll/select)
+- `net_platform_epoll.cpp` - Linux epoll implementation
+- `net_platform_win.cpp` - Windows select-based implementation
+- `net_platform_shared.cpp` - `TcpReader`/`TcpWriter` with TCP fragmentation handling
+- Rewrote `network_server.cpp` with single-threaded event loop
+- Fixed TCP fragmentation with `TcpReader` two-stage read state machine
+- Strict `-Wall -Werror -Wextra -Wshadow` compilation
+- All 80 unit tests pass with zero warnings
+
+## Phase 6 - 2D GUI & Modern Architecture ✅
+- **File structure cleanup**: Removed `console_ui.*`, `net_platform.*`, `Makefile`
+- **Build system**: `CMakeLists.txt` with automatic Raylib fetch via FetchContent, sanitizer support
+- **Network architecture**: Pure epoll-based, non-blocking I/O with `fcntl O_NONBLOCK`, `EPOLLIN|EPOLLOUT|EPOLLET|EPOLLRDHUP`, per-client `RecvBuffer`/`SendBuffer`, length-prefixed TCP framing
+- **Raylib GUI** (`src/ui/`):
+  - `colors.h` - Official Uno color palette constants
+  - `card_renderer.h/cpp` - Procedural rounded-rectangle cards with centered symbols, hover detection
+  - `menu_view.h/cpp` - Full menu system: main menu, difficulty selector, local/mixed/LAN setup screens with text input, +/- buttons, Vietnamese rules toggle
+  - `game_view.h/cpp` - Game table: green felt background, opponent card-count badges, discard/draw piles with direction indicator, fanned hand with hover lift (20px), click-to-play, color picker overlay for wild cards, game-over screen
+  - `gui.h/cpp` - Orchestrator: 60fps loop, mode dispatch, bot turn delay, integration with NetworkServer/NetworkClient
+- **MVC Architecture**: Model (`src/core/`, `src/ai/`), View (`src/ui/`), Controller (`src/network/`)
+- **Modern C++**: All raw pointers eliminated, `std::unique_ptr` for bot strategies, `std::vector` throughout, no `new`/`delete`
+- **Build**: CMake with strict flags, AddressSanitizer + UndefinedBehaviorSanitizer option, `O2` optimization
+
+## Next Steps
+1. Build on Linux/WSL: `mkdir build && cd build && cmake .. && make`
+2. Install Raylib dev libraries or let CMake fetch them automatically
+3. Run `./test_all` to verify all 80 tests
+4. Run `./gameuno` to launch the GUI
+5. For LAN mode, run server instance and client instances on same/different machines

@@ -4,10 +4,14 @@
 #include <cstring>
 #include <sstream>
 #include <string>
+#include <fcntl.h>
+#include <unistd.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 
 NetworkServer::NetworkServer(const GameConfig & cfg, bool viet)
     : config(cfg), vietRules(viet), engine(cfg, viet),
-      listenSocket(INVALID_SOCK), clientCount(0), running(false)
+      listenFd(-1), epollFd(-1), clientCount(0), running(false)
 {
 }
 
@@ -16,100 +20,72 @@ NetworkServer::~NetworkServer()
     stop();
 }
 
-bool NetworkServer::initPlatform()
+bool NetworkServer::setNonBlocking(int fd)
 {
-#ifdef _WIN32
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
-    {
-        std::cerr << "WSAStartup failed" << std::endl;
-        return false;
-    }
-#endif
-    loop = createEventLoop();
-    return true;
-}
-
-void NetworkServer::cleanupPlatform()
-{
-    loop.reset();
-#ifdef _WIN32
-    WSACleanup();
-#endif
+    int flags = fcntl(fd, F_GETFL, 0);
+    return fcntl(fd, F_SETFL, flags | O_NONBLOCK) >= 0;
 }
 
 bool NetworkServer::start(int port)
 {
-    if (!initPlatform())
-        return false;
+    listenFd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    if (listenFd < 0) return false;
 
-    listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (listenSocket == INVALID_SOCK)
-    {
-        std::cerr << "Socket creation failed" << std::endl;
-        cleanupPlatform();
-        return false;
-    }
-
-    sockaddr_in serverAddr;
-    std::memset(&serverAddr, 0, sizeof(serverAddr));
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_addr.s_addr = INADDR_ANY;
-    serverAddr.sin_port = htons(port);
-
-#ifdef _WIN32
-    if (bind(listenSocket, (sockaddr *)&serverAddr, sizeof(serverAddr)) == SOCK_ERR)
-#else
     int opt = 1;
-    setsockopt(listenSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-    if (bind(listenSocket, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0)
-#endif
-    {
-        std::cerr << "Bind failed" << std::endl;
-        closesocket(listenSocket);
-        cleanupPlatform();
-        return false;
-    }
+    setsockopt(listenFd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
-    if (listen(listenSocket, MAX_CLIENTS) == SOCK_ERR)
-    {
-        std::cerr << "Listen failed" << std::endl;
-        closesocket(listenSocket);
-        cleanupPlatform();
-        return false;
-    }
+    sockaddr_in addr;
+    std::memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(port);
 
-    setNonBlocking(listenSocket);
-    loop->watch(listenSocket, IOEvent::ACCEPT);
+    if (bind(listenFd, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+    { close(listenFd); return false; }
+
+    if (listen(listenFd, MAX_CLIENTS) < 0)
+    { close(listenFd); return false; }
+
+    epollFd = epoll_create1(0);
+    if (epollFd < 0) { close(listenFd); return false; }
+
+    struct epoll_event ev;
+    ev.events = EPOLLIN | EPOLLET;
+    ev.data.u32 = 0; // 0 means listen socket
+    epoll_ctl(epollFd, EPOLL_CTL_ADD, listenFd, &ev);
+
     running = true;
-
-    std::cout << msg(config, 53) << port << std::endl;
+    std::cerr << "Server started on port " << port << std::endl;
     return true;
 }
 
 void NetworkServer::stop()
 {
     running = false;
-    if (loop) loop->stop();
 
     for (auto & kv : clients)
     {
-        if (kv.second.fd != INVALID_SOCK)
+        if (kv.second.fd >= 0)
         {
-            loop->remove(kv.second.fd);
-            closesocket(kv.second.fd);
+            epoll_ctl(epollFd, EPOLL_CTL_DEL, kv.second.fd, nullptr);
+            close(kv.second.fd);
         }
     }
     clients.clear();
     clientCount = 0;
 
-    if (listenSocket != INVALID_SOCK)
+    if (listenFd >= 0)
     {
-        loop->remove(listenSocket);
-        closesocket(listenSocket);
-        listenSocket = INVALID_SOCK;
+        epoll_ctl(epollFd, EPOLL_CTL_DEL, listenFd, nullptr);
+        close(listenFd);
+        listenFd = -1;
     }
-    cleanupPlatform();
+
+    if (epollFd >= 0)
+    {
+        close(epollFd);
+        epollFd = -1;
+    }
 }
 
 int NetworkServer::nextClientId()
@@ -122,119 +98,103 @@ int NetworkServer::nextClientId()
 
 bool NetworkServer::waitForPlayers(int expectedPlayers)
 {
-    if (!loop) return false;
+    struct epoll_event events[16];
 
     while (running && clientCount < expectedPlayers)
     {
-        IOEventData events[16];
-        int n = loop->dispatch(events, 16, 1000);
+        int n = epoll_wait(epollFd, events, 16, 1000);
         if (n < 0) continue;
 
         for (int i = 0; i < n; i++)
         {
-            if (events[i].type == IOEvent::ACCEPT)
-                onAccept();
+            if (events[i].data.u32 == 0)
+                handleAccept();
         }
     }
     return running;
 }
 
-void NetworkServer::onAccept()
+void NetworkServer::handleAccept()
 {
-    sockaddr_in clientAddr;
-#ifdef _WIN32
-    int addrLen = sizeof(clientAddr);
-#else
-    socklen_t addrLen = sizeof(clientAddr);
-#endif
-    socket_t newFd = accept(listenSocket, (struct sockaddr *)&clientAddr, &addrLen);
-    if (newFd == INVALID_SOCK)
-        return;
-
+    sockaddr_in addr;
+    socklen_t addrLen = sizeof(addr);
+    int newFd = accept(listenFd, (struct sockaddr *)&addr, &addrLen);
+    if (newFd < 0) return;
     setNonBlocking(newFd);
 
     int id = nextClientId();
-    if (id < 0)
-    {
-        closesocket(newFd);
-        return;
-    }
+    if (id < 0) { close(newFd); return; }
 
-    ClientContext ctx;
+    Client ctx;
     ctx.fd = newFd;
     ctx.connected = true;
     clients[id] = std::move(ctx);
     clientCount++;
 
-    loop->watch(newFd, IOEvent::READ);
-    std::cout << "Player " << clientCount << " connected (id=" << id << ")" << std::endl;
+    struct epoll_event ev;
+    ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+    ev.data.u32 = id + 1;
+    epoll_ctl(epollFd, EPOLL_CTL_ADD, newFd, &ev);
+
+    std::cerr << "Player " << clientCount << " connected (id=" << id << ")" << std::endl;
 }
 
-void NetworkServer::onRead(int clientId)
+void NetworkServer::handleRead(int clientId)
 {
     auto it = clients.find(clientId);
     if (it == clients.end()) return;
 
-    ClientContext & ctx = it->second;
-    if (!ctx.reader.readPacket(ctx.fd))
-    {
-        onClose(clientId);
-        return;
-    }
+    Client & ctx = it->second;
+    int n = ctx.recvBuf.fill(ctx.fd);
+    if (n <= 0) { handleClose(clientId); return; }
 
-    PacketType type = ctx.reader.packetType();
-    unsigned char pid = ctx.reader.playerId();
-    const char * body = ctx.reader.body();
-    int bodyLen = ctx.reader.bodyLen();
-
-    switch (type)
+    while (ctx.recvBuf.hasPacket())
     {
-        case PKT_PLAY_CARD:
+        auto pkt = ctx.recvBuf.readPacket();
+        unsigned char pid = pkt.playerId;
+
+        switch (pkt.type)
         {
-            if (bodyLen >= (int)sizeof(PacketPlayCard))
+            case PKT_PLAY_CARD:
             {
-                const PacketPlayCard * pkt = reinterpret_cast<const PacketPlayCard *>(body);
-                if (pkt->chosenColor <= 4)
+                if (pkt.body.size() >= sizeof(PacketPlayCard))
                 {
+                    const PacketPlayCard * pc = reinterpret_cast<const PacketPlayCard *>(pkt.body.data());
                     const char * colorNames[] = {"", "do", "xanh la", "xanh duong", "vang"};
-                    std::string chosenCol = colorNames[pkt->chosenColor];
-                    engine.playCard(pid, pkt->cardIndex, chosenCol);
+                    if (pc->chosenColor >= 1 && pc->chosenColor <= 4)
+                    {
+                        engine.playCard(pid, pc->cardIndex, colorNames[pc->chosenColor]);
+                        broadcastSyncState();
+                    }
+                }
+                break;
+            }
+            case PKT_DRAW:
+                engine.drawCard(pid);
+                broadcastSyncState();
+                break;
+            case PKT_JUMP_IN:
+                if (pkt.body.size() >= sizeof(PacketJumpIn))
+                {
+                    const PacketJumpIn * pj = reinterpret_cast<const PacketJumpIn *>(pkt.body.data());
+                    engine.jumpIn(pid, pj->cardIndex);
                     broadcastSyncState();
                 }
-            }
-            break;
+                break;
+            case PKT_CALL_UNO:
+                engine.callUno(pid);
+                break;
+            case PKT_CATCH_UNO:
+                if (pkt.body.size() >= sizeof(PacketUno))
+                {
+                    const PacketUno * pu = reinterpret_cast<const PacketUno *>(pkt.body.data());
+                    engine.catchUno(pid, pu->targetId);
+                    broadcastSyncState();
+                }
+                break;
+            default:
+                break;
         }
-        case PKT_DRAW:
-        {
-            engine.drawCard(pid);
-            broadcastSyncState();
-            break;
-        }
-        case PKT_JUMP_IN:
-        {
-            if (bodyLen >= (int)sizeof(PacketJumpIn))
-            {
-                const PacketJumpIn * pkt = reinterpret_cast<const PacketJumpIn *>(body);
-                engine.jumpIn(pid, pkt->cardIndex);
-                broadcastSyncState();
-            }
-            break;
-        }
-        case PKT_CALL_UNO:
-            engine.callUno(pid);
-            break;
-        case PKT_CATCH_UNO:
-        {
-            if (bodyLen >= (int)sizeof(PacketUno))
-            {
-                const PacketUno * pkt = reinterpret_cast<const PacketUno *>(body);
-                engine.catchUno(pid, pkt->targetId);
-                broadcastSyncState();
-            }
-            break;
-        }
-        default:
-            break;
     }
 
     if (engine.isGameOver())
@@ -244,41 +204,38 @@ void NetworkServer::onRead(int clientId)
     }
 }
 
-void NetworkServer::onWrite(int clientId)
+void NetworkServer::handleWrite(int clientId)
 {
     auto it = clients.find(clientId);
     if (it == clients.end()) return;
 
-    ClientContext & ctx = it->second;
-    int result = ctx.writer.sendPending(ctx.fd);
-    if (result == SOCK_ERR)
+    Client & ctx = it->second;
+    int n = ctx.sendBuf.flush(ctx.fd);
+    if (n < 0) handleClose(clientId);
+
+    if (ctx.sendBuf.idle())
     {
-        onClose(clientId);
-        return;
+        struct epoll_event ev;
+        ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+        ev.data.u32 = clientId + 1;
+        epoll_ctl(epollFd, EPOLL_CTL_MOD, ctx.fd, &ev);
     }
-    if (ctx.writer.isIdle())
-        loop->unwatch(ctx.fd, IOEvent::WRITE);
 }
 
-void NetworkServer::onClose(int clientId)
+void NetworkServer::handleClose(int clientId)
 {
     auto it = clients.find(clientId);
     if (it == clients.end()) return;
 
-    ClientContext & ctx = it->second;
-    if (ctx.fd != INVALID_SOCK)
+    Client & ctx = it->second;
+    if (ctx.fd >= 0)
     {
-        loop->remove(ctx.fd);
-        closesocket(ctx.fd);
+        epoll_ctl(epollFd, EPOLL_CTL_DEL, ctx.fd, nullptr);
+        close(ctx.fd);
     }
     clients.erase(clientId);
     clientCount--;
-    std::cout << "Player " << clientId << " disconnected" << std::endl;
-}
-
-void NetworkServer::removeClient(int clientId)
-{
-    onClose(clientId);
+    std::cerr << "Player " << clientId << " disconnected" << std::endl;
 }
 
 void NetworkServer::broadcastSyncState()
@@ -299,7 +256,7 @@ void NetworkServer::broadcastSyncState()
 
     for (auto & kv : clients)
     {
-        ClientContext & ctx = kv.second;
+        Client & ctx = kv.second;
         if (!ctx.connected) continue;
 
         int myPlayerId = kv.first;
@@ -344,17 +301,17 @@ void NetworkServer::broadcastSyncState()
             }
         }
 
-        ctx.writer.beginPacket(PKT_SYNC_STATE, 0, bodySize);
-        ctx.writer.writeBody(buf.data(), bodySize);
+        ctx.sendBuf.beginPacket(PKT_SYNC_STATE, 0, bodySize);
+        ctx.sendBuf.writeBody(buf.data(), bodySize);
+        ctx.sendBuf.flush(ctx.fd);
 
-        int result = ctx.writer.sendPending(ctx.fd);
-        if (result == SOCK_ERR)
+        if (!ctx.sendBuf.idle())
         {
-            onClose(kv.first);
-            continue;
+            struct epoll_event ev;
+            ev.events = EPOLLIN | EPOLLOUT | EPOLLET | EPOLLRDHUP;
+            ev.data.u32 = kv.first + 1;
+            epoll_ctl(epollFd, EPOLL_CTL_MOD, ctx.fd, &ev);
         }
-        if (!ctx.writer.isIdle())
-            loop->watch(ctx.fd, IOEvent::WRITE);
     }
 }
 
@@ -374,46 +331,40 @@ void NetworkServer::runGameLoop()
     engine.start();
     broadcastSyncState();
 
+    struct epoll_event events[16];
+
     while (running && !engine.isGameOver())
     {
-        IOEventData events[16];
-        int n = loop->dispatch(events, 16, 100);
+        int n = epoll_wait(epollFd, events, 16, 100);
         if (n < 0) continue;
 
         for (int i = 0; i < n; i++)
         {
-            if (events[i].type == IOEvent::ACCEPT)
-                onAccept();
+            if (events[i].data.u32 == 0)
+                handleAccept();
             else
             {
-                int clientId = -1;
-                for (auto & kv : clients)
-                {
-                    if (kv.second.fd == events[i].fd)
-                    {
-                        clientId = kv.first;
-                        break;
-                    }
-                }
-                if (clientId < 0) continue;
-
-                switch (events[i].type)
-                {
-                    case IOEvent::READ:  onRead(clientId); break;
-                    case IOEvent::WRITE: onWrite(clientId); break;
-                    case IOEvent::CLOSE: onClose(clientId); break;
-                    default: break;
-                }
+                int clientId = (int)events[i].data.u32 - 1;
+                if (events[i].events & (EPOLLHUP | EPOLLRDHUP | EPOLLERR))
+                    handleClose(clientId);
+                else if (events[i].events & EPOLLOUT)
+                    handleWrite(clientId);
+                else if (events[i].events & EPOLLIN)
+                    handleRead(clientId);
             }
+        }
+
+        if (engine.isGameOver())
+        {
+            broadcastSyncState();
+            break;
         }
     }
 
     if (engine.isGameOver())
     {
-        broadcastSyncState();
         int winner = engine.getWinner();
         if (winner >= 0)
-            std::cout << engine.getPlayer(winner)->getName()
-                      << msg(config, 23) << std::endl;
+            std::cerr << engine.getPlayer(winner)->getName() << " wins!" << std::endl;
     }
 }

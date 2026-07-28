@@ -5,9 +5,10 @@
 #include "player.h"
 #include "game_engine.h"
 #include "packets.h"
-#include "net_platform.h"
+#include "tcp_buffer.h"
 #include <string>
 #include <vector>
+#include <atomic>
 
 struct SyncPlayer
 {
@@ -32,7 +33,7 @@ public:
 
     bool connect(const std::string & host, int port = DEFAULT_PORT);
     void disconnect();
-    bool receiveSyncState(SyncState & state, int timeoutMs = 5000);
+    bool receiveSyncState(SyncState & state, int timeoutMs = 100);
     bool sendPlayCard(int cardIdx, const std::string & chosenColor, int playerId);
     bool sendDraw(int playerId);
     bool sendJumpIn(int cardIdx, int playerId);
@@ -42,13 +43,13 @@ public:
     bool isConnected() const { return connected; }
 
 private:
-    socket_t sock;
+    int sock;
+    int epollFd;
     bool connected;
-    TcpReader reader;
-    TcpWriter writer;
+    RecvBuffer recvBuf;
+    SendBuffer sendBuf;
 
-    bool sendRaw(const void * data, int len);
-    bool readRaw(void * buffer, int len);
+    bool sendPacket(unsigned char type, unsigned char playerId, const void * body, int bodyLen);
 };
 
 #endif

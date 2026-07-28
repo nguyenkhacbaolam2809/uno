@@ -1,12 +1,17 @@
 #include "network_client.h"
 #include <iostream>
 #include <cstring>
-#include <string>
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <windows.h>
+#include <cstdlib>
+#include <fcntl.h>
+#include <unistd.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/epoll.h>
+#include <netdb.h>
 
-NetworkClient::NetworkClient() : sock(INVALID_SOCK), connected(false) {}
+NetworkClient::NetworkClient() : sock(-1), epollFd(-1), connected(false)
+{
+}
 
 NetworkClient::~NetworkClient()
 {
@@ -15,33 +20,46 @@ NetworkClient::~NetworkClient()
 
 bool NetworkClient::connect(const std::string & host, int port)
 {
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+    sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
+    if (sock < 0) return false;
+
+    sockaddr_in addr;
+    std::memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+
+    struct hostent * he = gethostbyname(host.c_str());
+    if (he)
+        std::memcpy(&addr.sin_addr, he->h_addr_list[0], he->h_length);
+    else
+        inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
+
+    ::connect(sock, (struct sockaddr *)&addr, sizeof(addr));
+
+    epollFd = epoll_create1(0);
+    if (epollFd < 0) { close(sock); sock = -1; return false; }
+
+    struct epoll_event ev;
+    ev.events = EPOLLIN | EPOLLOUT | EPOLLET;
+    ev.data.fd = sock;
+    epoll_ctl(epollFd, EPOLL_CTL_ADD, sock, &ev);
+
+    struct epoll_event events[1];
+    int ret = epoll_wait(epollFd, events, 1, 3000);
+    if (ret <= 0)
     {
-        std::cerr << "WSAStartup failed" << std::endl;
+        close(sock); close(epollFd);
+        sock = -1; epollFd = -1;
         return false;
     }
 
-    sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (sock == INVALID_SOCK)
+    int err = 0;
+    socklen_t errLen = sizeof(err);
+    getsockopt(sock, SOL_SOCKET, SO_ERROR, &err, &errLen);
+    if (err != 0)
     {
-        std::cerr << "Socket creation failed: " << WSAGetLastError() << std::endl;
-        WSACleanup();
-        return false;
-    }
-
-    sockaddr_in serverAddr;
-    std::memset(&serverAddr, 0, sizeof(serverAddr));
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(port);
-    inet_pton(AF_INET, host.c_str(), &serverAddr.sin_addr);
-
-    if (::connect(sock, (sockaddr *)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR)
-    {
-        std::cerr << "Connection failed: " << WSAGetLastError() << std::endl;
-        closesocket(sock);
-        sock = INVALID_SOCK;
-        WSACleanup();
+        close(sock); close(epollFd);
+        sock = -1; epollFd = -1;
         return false;
     }
 
@@ -51,59 +69,50 @@ bool NetworkClient::connect(const std::string & host, int port)
 
 void NetworkClient::disconnect()
 {
-    if (sock != INVALID_SOCK)
-    {
-        closesocket(sock);
-        sock = INVALID_SOCK;
-    }
     connected = false;
-    WSACleanup();
+    if (sock >= 0) { close(sock); sock = -1; }
+    if (epollFd >= 0) { close(epollFd); epollFd = -1; }
 }
 
-bool NetworkClient::sendRaw(const void * data, int len)
+bool NetworkClient::sendPacket(unsigned char type, unsigned char playerId,
+                                const void * body, int bodyLen)
 {
-    if (sock == INVALID_SOCK) return false;
-    const char * buf = (const char *)data;
-    int total = 0;
-    while (total < len)
-    {
-        int sent = send(sock, buf + total, len - total, 0);
-        if (sent == SOCKET_ERROR) return false;
-        total += sent;
-    }
+    if (!connected) return false;
+    sendBuf.beginPacket(type, playerId, bodyLen);
+    if (body && bodyLen > 0)
+        sendBuf.writeBody(body, bodyLen);
+    sendBuf.flush(sock);
     return true;
 }
 
-bool NetworkClient::readRaw(void * buffer, int len)
+bool NetworkClient::receiveSyncState(SyncState & state, int timeoutMs)
 {
-    if (sock == INVALID_SOCK) return false;
-    char * buf = (char *)buffer;
-    int total = 0;
-    while (total < len)
+    if (!connected) return false;
+
+    struct epoll_event events[1];
+    int ret = epoll_wait(epollFd, events, 1, timeoutMs);
+    if (ret <= 0) return false;
+
+    int n = recvBuf.fill(sock);
+    if (n <= 0)
     {
-        int got = recv(sock, buf + total, len - total, 0);
-        if (got <= 0) return false;
-        total += got;
+        if (n == 0) connected = false;
+        return false;
     }
-    return true;
-}
 
-bool NetworkClient::receiveSyncState(SyncState & state, int /*timeoutMs*/)
-{
-    if (!reader.readPacket(sock))
+    if (!recvBuf.hasPacket())
         return false;
 
-    if (reader.packetType() != PKT_SYNC_STATE)
+    auto pkt = recvBuf.readPacket();
+    if (pkt.type != PKT_SYNC_STATE)
         return false;
 
-    const char * body = reader.body();
-    int bodyLen = reader.bodyLen();
+    const char * body = pkt.body.data();
+    int bodyLen = (int)pkt.body.size();
     int offset = 0;
 
-    int myId;
     if (bodyLen < (int)sizeof(int)) return false;
-    std::memcpy(&myId, body + offset, sizeof(int));
-    state.myPlayerId = myId;
+    std::memcpy(&state.myPlayerId, body + offset, sizeof(int));
     offset += sizeof(int);
 
     if (bodyLen - offset < (int)sizeof(GameState)) return false;
@@ -121,9 +130,8 @@ bool NetworkClient::receiveSyncState(SyncState & state, int /*timeoutMs*/)
         int nameLen;
         std::memcpy(&nameLen, body + offset, sizeof(int));
         offset += sizeof(int);
-
-        std::string nameStr(body + offset, nameLen);
-        sp.name = nameStr;
+        if (offset + nameLen > bodyLen) return false;
+        sp.name = std::string(body + offset, nameLen);
         offset += nameLen;
 
         int cardCount, pType, pDiff;
@@ -139,9 +147,10 @@ bool NetworkClient::receiveSyncState(SyncState & state, int /*timeoutMs*/)
 
         for (int j = 0; j < cardCount; j++)
         {
+            if (offset + (int)sizeof(card) > bodyLen) return false;
             card c;
             std::memcpy(&c, body + offset, sizeof(card));
-            offset += sizeof(card);
+            offset += (int)sizeof(card);
             sp.hand.push_back(c);
         }
 
@@ -153,51 +162,38 @@ bool NetworkClient::receiveSyncState(SyncState & state, int /*timeoutMs*/)
 
 bool NetworkClient::sendPlayCard(int cardIdx, const std::string & chosenColor, int playerId)
 {
-    char body[sizeof(PacketPlayCard)];
-    PacketPlayCard * pkt = reinterpret_cast<PacketPlayCard *>(body);
-    pkt->cardIndex = (unsigned char)cardIdx;
+    PacketPlayCard pkt;
+    pkt.cardIndex = (unsigned char)cardIdx;
 
-    if (chosenColor == "do" || chosenColor == "red") pkt->chosenColor = 1;
-    else if (chosenColor == "xanh la" || chosenColor == "green") pkt->chosenColor = 2;
-    else if (chosenColor == "xanh duong" || chosenColor == "blue") pkt->chosenColor = 3;
-    else if (chosenColor == "vang" || chosenColor == "yellow") pkt->chosenColor = 4;
-    else pkt->chosenColor = 0;
+    if (chosenColor == "do" || chosenColor == "red") pkt.chosenColor = 1;
+    else if (chosenColor == "xanh la" || chosenColor == "green") pkt.chosenColor = 2;
+    else if (chosenColor == "xanh duong" || chosenColor == "blue") pkt.chosenColor = 3;
+    else if (chosenColor == "vang" || chosenColor == "yellow") pkt.chosenColor = 4;
+    else pkt.chosenColor = 0;
 
-    writer.beginPacket(PKT_PLAY_CARD, (unsigned char)playerId, sizeof(PacketPlayCard));
-    writer.writeBody(body, sizeof(PacketPlayCard));
-    return sendRaw(writer.writeBuf.data(), (int)writer.writeBuf.size());
+    return sendPacket(PKT_PLAY_CARD, (unsigned char)playerId, &pkt, sizeof(pkt));
 }
 
 bool NetworkClient::sendDraw(int playerId)
 {
-    writer.beginPacket(PKT_DRAW, (unsigned char)playerId, 0);
-    return sendRaw(writer.writeBuf.data(), (int)writer.writeBuf.size());
+    return sendPacket(PKT_DRAW, (unsigned char)playerId, nullptr, 0);
 }
 
 bool NetworkClient::sendJumpIn(int cardIdx, int playerId)
 {
-    char body[sizeof(PacketJumpIn)];
-    PacketJumpIn * pkt = reinterpret_cast<PacketJumpIn *>(body);
-    pkt->cardIndex = (unsigned char)cardIdx;
-
-    writer.beginPacket(PKT_JUMP_IN, (unsigned char)playerId, sizeof(PacketJumpIn));
-    writer.writeBody(body, sizeof(PacketJumpIn));
-    return sendRaw(writer.writeBuf.data(), (int)writer.writeBuf.size());
+    PacketJumpIn pkt;
+    pkt.cardIndex = (unsigned char)cardIdx;
+    return sendPacket(PKT_JUMP_IN, (unsigned char)playerId, &pkt, sizeof(pkt));
 }
 
 bool NetworkClient::sendCallUno(int playerId)
 {
-    writer.beginPacket(PKT_CALL_UNO, (unsigned char)playerId, 0);
-    return sendRaw(writer.writeBuf.data(), (int)writer.writeBuf.size());
+    return sendPacket(PKT_CALL_UNO, (unsigned char)playerId, nullptr, 0);
 }
 
 bool NetworkClient::sendCatchUno(int targetId, int playerId)
 {
-    char body[sizeof(PacketUno)];
-    PacketUno * pkt = reinterpret_cast<PacketUno *>(body);
-    pkt->targetId = (unsigned char)targetId;
-
-    writer.beginPacket(PKT_CATCH_UNO, (unsigned char)playerId, sizeof(PacketUno));
-    writer.writeBody(body, sizeof(PacketUno));
-    return sendRaw(writer.writeBuf.data(), (int)writer.writeBuf.size());
+    PacketUno pkt;
+    pkt.targetId = (unsigned char)targetId;
+    return sendPacket(PKT_CATCH_UNO, (unsigned char)playerId, &pkt, sizeof(pkt));
 }

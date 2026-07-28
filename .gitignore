@@ -1,5 +1,7 @@
+build/
 *.o
 *.exe
+*.out
 *.stackdump
 .vscode/
 .DS_Store

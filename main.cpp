@@ -1,16 +1,18 @@
 #include "config.h"
-#include "console_ui.h"
+#include "gui.h"
 #include <cstdlib>
 #include <ctime>
 
 int main()
 {
-    srand(time(NULL));
+    std::srand(static_cast<unsigned>(std::time(nullptr)));
 
-    GameConfig config = promptConfig();
+    GameConfig cfg;
+    cfg.os = OS_UBUNTU;
+    cfg.lang = LANG_ENGLISH;
 
-    ConsoleUI ui(config);
-    ui.run();
+    Gui gui(cfg);
+    gui.run();
 
     return 0;
 }
