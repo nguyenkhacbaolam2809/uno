@@ -44,13 +44,13 @@ card deck::draw()
     return c;
 }
 
-int deck::add_card(card c)
+int deck::add_card(const card & c) noexcept
 {
     cards.push_back(c);
     return 0;
 }
 
-void deck::quick_shuffle()
+void deck::quick_shuffle() noexcept
 {
     int n = static_cast<int>(cards.size());
     for (int i = n - 1; i > 0; i--)
@@ -62,13 +62,10 @@ void deck::quick_shuffle()
     }
 }
 
-void deck::print_deck()
+void deck::print_deck() const
 {
     for (std::size_t i = 0; i < cards.size(); i++)
         std::cout << i << ": " << cards[i] << std::endl;
 }
 
-int deck::get_size() const
-{
-    return static_cast<int>(cards.size());
-}
+

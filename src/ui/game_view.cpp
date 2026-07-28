@@ -3,7 +3,17 @@
 #include "rules.h"
 #include "particle_system.h"
 #include "animation_manager.h"
+#include "colors.h"
 #include <algorithm>
+
+using uno::SCREEN_W;
+using uno::SCREEN_H;
+using uno::CARD_WIDTH;
+using uno::CARD_HEIGHT;
+using uno::BG_GREEN;
+using uno::GOLD_COLOR;
+using uno::WHITE_SMOKE;
+using uno::WILD_BG;
 
 GameView::GameView()
     : hoveredCard(-1), selectedCard(-1), needsColorPick(false),
@@ -68,6 +78,7 @@ void GameView::render(const GameEngine & engine, int localPlayerId)
     handleUnoCatchClick(engine, localPlayerId);
 }
 
+#ifndef _WIN32
 void GameView::renderSync(const SyncState & state, int localPlayerId)
 {
     renderBackground();
@@ -86,13 +97,12 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
         int x = startX + oppIdx * (slotW + gap);
         int y = 20;
 
-        DrawRectangleRounded((Rectangle){ (float)x, (float)y, (float)slotW, (float)slotH },
-                             0.3f, 10, Fade(BLACK, 0.3f));
-        DrawRectangleRoundedLines((Rectangle){ (float)x, (float)y, (float)slotW, (float)slotH },
-                                  0.3f, 10, 1, Fade(WHITE, 0.15f));
+        Rectangle slotRect = { (float)x, (float)y, (float)slotW, (float)slotH };
+        DrawRectangleRounded(slotRect, 0.3f, 10, Fade(BLACK, 0.3f));
+        DrawRectangleRoundedLines(slotRect, 0.3f, 10, 1, Fade(WHITE, 0.15f));
 
         bool isCurrent = (state.gs.turn % n) == i;
-        Color nameCol = isCurrent ? GOLD : WHITE_SMOKE;
+        Color nameCol = isCurrent ? GOLD_COLOR : WHITE_SMOKE;
 
         DrawText(state.players[i].name.c_str(), x + 10, y + 8, 18, nameCol);
         int cc = (int)state.players[i].hand.size();
@@ -102,7 +112,10 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
             card_renderer::drawBack(x + 10 + j * 32, y + 56, 0.3f);
 
         if (cc == 1)
-            DrawText("UNO!", x + slotW - 60, y + 8, 16, (Color){ 255, 200, 0, 255 });
+        {
+            Color unoTextColor = { 255, 200, 0, 255 };
+            DrawText("UNO!", x + slotW - 60, y + 8, 16, unoTextColor);
+        }
         oppIdx++;
     }
 
@@ -113,10 +126,10 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
         {
             std::string wtxt = state.players[winner].name + " wins!";
             int tw = MeasureText(wtxt.c_str(), 36);
-            DrawRectangle((SCREEN_W - tw) / 2 - 20, SCREEN_H / 2 - 40, tw + 40, 80,
-                          (Color){ 0, 0, 0, 180 });
+            Color overlayBg = { 0, 0, 0, 180 };
+            DrawRectangle((SCREEN_W - tw) / 2 - 20, SCREEN_H / 2 - 40, tw + 40, 80, overlayBg);
             int tw2 = MeasureText(wtxt.c_str(), 36);
-            DrawText(wtxt.c_str(), (SCREEN_W - tw2) / 2, SCREEN_H / 2 - 12, 36, GOLD);
+            DrawText(wtxt.c_str(), (SCREEN_W - tw2) / 2, SCREEN_H / 2 - 12, 36, GOLD_COLOR);
         }
         return;
     }
@@ -127,15 +140,17 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
 
     int drawX = cx - pileW - 60;
     int drawY = cy - pileH / 2;
-    DrawRectangleRounded((Rectangle){ (float)drawX, (float)drawY, (float)pileW, (float)pileH },
-                         0.3f, 10, (Color){ 0, 0, 0, 100 });
+    Rectangle drawPileRect = { (float)drawX, (float)drawY, (float)pileW, (float)pileH };
+    Color drawPileBg = { 0, 0, 0, 100 };
+    DrawRectangleRounded(drawPileRect, 0.3f, 10, drawPileBg);
     card_renderer::drawBack(drawX + 4, drawY + 4, 1.0f);
     DrawText("DRAW", drawX + 10, drawY + pileH + 8, 14, Fade(WHITE, 0.6f));
 
     int discX = cx + 20;
     int discY = cy - pileH / 2;
-    DrawRectangleRounded((Rectangle){ (float)discX, (float)discY, (float)pileW, (float)pileH },
-                         0.3f, 10, (Color){ 0, 0, 0, 80 });
+    Rectangle discPileRect = { (float)discX, (float)discY, (float)pileW, (float)pileH };
+    Color discPileBg = { 0, 0, 0, 80 };
+    DrawRectangleRounded(discPileRect, 0.3f, 10, discPileBg);
     card_renderer::drawCard(state.gs.currentCard, discX + 4, discY + 4, 1.0f);
     DrawText("PLAY", discX + 10, discY + pileH + 8, 14, Fade(WHITE, 0.6f));
 
@@ -143,11 +158,12 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
     {
         std::string forced = TextFormat("FORCED DRAW: %d", state.gs.drawStack);
         int fw = MeasureText(forced.c_str(), 20);
-        DrawText(forced.c_str(), cx - fw / 2, cy + pileH / 2 + 30, 20, (Color){ 255, 100, 100, 255 });
+        Color forcedColor = { 255, 100, 100, 255 };
+        DrawText(forced.c_str(), cx - fw / 2, cy + pileH / 2 + 30, 20, forcedColor);
     }
 
     const char * dirText = state.gs.direction == 1 ? "\xe2\x86\x91" : "\xe2\x86\x93";
-    DrawText(dirText, cx - 10, cy - pileH / 2 - 40, 32, Fade(GOLD, 0.8f));
+    DrawText(dirText, cx - 10, cy - pileH / 2 - 40, 32, Fade(GOLD_COLOR, 0.8f));
 
     const SyncPlayer & me = state.players[localPlayerId];
     int handSize = (int)me.hand.size();
@@ -158,15 +174,15 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
     for (int i = 0; i < handSize; i++)
     {
         Vector2 pos = getHandCardPos(i, handSize);
-        float lift = (isMyTurn && CheckCollisionPointRec(m,
-            (Rectangle){ pos.x, pos.y, (float)CARD_WIDTH, (float)CARD_HEIGHT })) ? 20.0f : 0.0f;
+        Rectangle cardHit = { pos.x, pos.y, (float)CARD_WIDTH, (float)CARD_HEIGHT };
+        float lift = (isMyTurn && CheckCollisionPointRec(m, cardHit)) ? 20.0f : 0.0f;
 
         if (lift > 0 && isMyTurn)
         {
             hoveredCard = i;
-            DrawRectangleRounded((Rectangle){ pos.x - 2, pos.y - 2 - lift,
-                                              (float)CARD_WIDTH + 4, (float)CARD_HEIGHT + 4 + lift },
-                                 0.3f, 10, Fade(GOLD, 0.4f));
+            Rectangle glowRect = { pos.x - 2, pos.y - 2 - lift,
+                                   (float)CARD_WIDTH + 4, (float)CARD_HEIGHT + 4 + lift };
+            DrawRectangleRounded(glowRect, 0.3f, 10, Fade(GOLD_COLOR, 0.4f));
         }
 
         card_renderer::drawCard(me.hand[i], (int)pos.x, (int)(pos.y - lift), 1.0f);
@@ -177,12 +193,13 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
     if (unoButtonEnabled)
     {
         Rectangle ubtn = { (float)(SCREEN_W / 2 + 60), (float)(SCREEN_H - 80), 100, 40 };
-        Color ucol = (Color){ 237, 28, 36, 255 };
+        Color unoRed = { 237, 28, 36, 255 };
+        Color ucol = unoRed;
         if (CheckCollisionPointRec(m, ubtn)) ucol = Fade(ucol, 0.7f);
         DrawRectangleRounded(ubtn, 0.3f, 10, ucol);
-        DrawRectangleRoundedLines(ubtn, 0.3f, 10, 2, GOLD);
+        DrawRectangleRoundedLines(ubtn, 0.3f, 10, 2, GOLD_COLOR);
         int tw3 = MeasureText("UNO!", 22);
-        DrawText("UNO!", (SCREEN_W - tw3) / 2, SCREEN_H - 74, 22, GOLD);
+        DrawText("UNO!", (SCREEN_W - tw3) / 2, SCREEN_H - 74, 22, GOLD_COLOR);
 
         if (CheckCollisionPointRec(m, ubtn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
         {
@@ -212,9 +229,10 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
             {
                 int sx = startX + oppIdx * (slotW + gap);
                 Rectangle cr = { (float)sx, 110, (float)slotW, 30 };
-                DrawRectangleRounded(cr, 0.3f, 10, (Color){ 237, 28, 36, 200 });
+                Color catchBg = { 237, 28, 36, 200 };
+                DrawRectangleRounded(cr, 0.3f, 10, catchBg);
                 int ctw = MeasureText("CATCH UNO?", 16);
-                DrawText("CATCH UNO?", sx + (slotW - ctw) / 2, 114, 16, GOLD);
+                DrawText("CATCH UNO?", sx + (slotW - ctw) / 2, 114, 16, GOLD_COLOR);
             }
             oppIdx++;
         }
@@ -223,10 +241,12 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
     if (isMyTurn)
     {
         Rectangle btn = { (float)(SCREEN_W / 2 - 50), (float)(SCREEN_H - 75), 100, 30 };
+        Color drawBtnHover = { 200, 180, 0, 255 };
+        Color drawBtnNormal = { 180, 140, 20, 255 };
         if (CheckCollisionPointRec(m, btn))
-            DrawRectangleRounded(btn, 0.3f, 10, (Color){ 200, 180, 0, 255 });
+            DrawRectangleRounded(btn, 0.3f, 10, drawBtnHover);
         else
-            DrawRectangleRounded(btn, 0.3f, 10, (Color){ 180, 140, 20, 255 });
+            DrawRectangleRounded(btn, 0.3f, 10, drawBtnNormal);
         int tw4 = MeasureText("DRAW", 18);
         DrawText("DRAW", (SCREEN_W - tw4) / 2, SCREEN_H - 72, 18, WHITE);
         if (CheckCollisionPointRec(m, btn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
@@ -272,8 +292,8 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
             for (int i = 0; i < handSize; i++)
             {
                 Vector2 pos = getHandCardPos(i, handSize);
-                if (CheckCollisionPointRec(m,
-                    (Rectangle){ pos.x, pos.y, (float)CARD_WIDTH, (float)CARD_HEIGHT }))
+                Rectangle cardArea = { pos.x, pos.y, (float)CARD_WIDTH, (float)CARD_HEIGHT };
+                if (CheckCollisionPointRec(m, cardArea))
                 {
                     card chosen = me.hand[i];
                     if (canPlayCard(chosen, state.gs.currentCard))
@@ -296,3 +316,4 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
         }
     }
 }
+#endif

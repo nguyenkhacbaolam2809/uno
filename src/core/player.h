@@ -14,7 +14,7 @@ class player
         player();
         player(std::string name, PlayerType type = HUMAN, BotDifficulty diff = D_EASY);
 
-        void hand_add(card temp);
+        void hand_add(const card & temp);
         card hand_remove(int pos);
         void print() const;
         int get_size() const;

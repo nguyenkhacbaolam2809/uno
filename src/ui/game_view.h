@@ -5,7 +5,9 @@
 #include "game_engine.h"
 #include "card.h"
 #include "colors.h"
+#ifndef _WIN32
 #include "network_client.h"
+#endif
 #include <vector>
 #include <string>
 
@@ -32,7 +34,9 @@ public:
     GameView();
 
     void render(const GameEngine & engine, int localPlayerId);
+#ifndef _WIN32
     void renderSync(const SyncState & state, int localPlayerId);
+#endif
     InteractionResult getInteraction();
 
     void showMessage(const std::string & msg, float duration = 2.0f);
@@ -63,13 +67,15 @@ private:
     void renderMessageOverlay();
     void renderUnoButton(const GameEngine & engine, int localPlayerId);
     void renderCatchTargets(const GameEngine & engine, int localPlayerId);
+    void renderWinConfetti(const GameEngine & engine);
+    void renderCardGlow(const card & c, int x, int y, float scale);
 
     void handleHandClick(const GameEngine & engine, int localPlayerId);
     void handleUnoCatchClick(const GameEngine & engine, int localPlayerId);
     int cardAtPos(Vector2 mouse, const GameEngine & engine, int localPlayerId) const;
 
-    Vector2 getHandCardPos(int index, int total);
-    Rectangle getCardRect(int index, int total);
+    Vector2 getHandCardPos(int index, int total) const;
+    Rectangle getCardRect(int index, int total) const;
 };
 
 #endif

@@ -1,8 +1,12 @@
 #include "card_renderer.h"
 #include "rules.h"
-#include <cstring>
 #include <cstdio>
 #include <algorithm>
+
+using uno::CARD_WIDTH;
+using uno::CARD_HEIGHT;
+using uno::CARD_RADIUS;
+using uno::WILD_BG;
 
 namespace card_renderer {
 
@@ -33,7 +37,8 @@ static void drawCardBody(int x, int y, int w, int h, COLOR col, float scale)
     drawRoundedRect(x, y, w, h, static_cast<int>(CARD_RADIUS * scale), color);
 
     int inset = static_cast<int>(4 * scale);
-    Color inner = (col == wild) ? (Color){ 80, 80, 80, 255 } : Fade(color, 0.4f);
+    Color innerGray = { 80, 80, 80, 255 };
+    Color inner = (col == wild) ? innerGray : Fade(color, 0.4f);
     drawRoundedRect(x + inset, y + inset, w - 2 * inset, h - 2 * inset,
                     static_cast<int>(CARD_RADIUS * scale / 2), inner);
 
@@ -58,9 +63,11 @@ static void drawCardText(int x, int y, int w, int h, const card & c, float scale
     int textX = x + (w - textW) / 2;
     int textY = y + (h - fontSize) / 2;
 
-    Color textColor = (c.color == yellow) ? (Color){ 60, 40, 0, 255 } : WHITE;
+    Color darkYellow = { 60, 40, 0, 255 };
+    Color shadowColor = { 0, 0, 0, 100 };
+    Color textColor = (c.color == yellow) ? darkYellow : WHITE;
 
-    DrawText(label, textX + 1, textY + 1, fontSize, (Color){ 0, 0, 0, 100 });
+    DrawText(label, textX + 1, textY + 1, fontSize, shadowColor);
     DrawText(label, textX, textY, fontSize, textColor);
 
     if (c.number == CARD_SKIP || c.number == CARD_REVERSE ||
@@ -99,14 +106,15 @@ void drawCard(const card & c, int x, int y, float scale)
     int w = static_cast<int>(CARD_WIDTH * scale);
     int h = static_cast<int>(CARD_HEIGHT * scale);
 
-    DrawRectangle(x + 1, y + 1, w, h, (Color){ 0, 0, 0, 60 });
+    Color shadow = { 0, 0, 0, 60 };
+    DrawRectangle(x + 1, y + 1, w, h, shadow);
     drawCardBody(x, y, w, h, c.color, scale);
     drawCardText(x, y, w, h, c, scale);
 
     int border = static_cast<int>(2 * scale);
     Color borderCol = Fade(WHITE, 0.3f);
-    DrawRectangleLinesEx((Rectangle){ (float)x, (float)y, (float)w, (float)h },
-                         (float)border, borderCol);
+    Rectangle borderRect = { (float)x, (float)y, (float)w, (float)h };
+    DrawRectangleLinesEx(borderRect, (float)border, borderCol);
 }
 
 void drawBack(int x, int y, float scale)
@@ -114,16 +122,20 @@ void drawBack(int x, int y, float scale)
     int w = static_cast<int>(CARD_WIDTH * scale);
     int h = static_cast<int>(CARD_HEIGHT * scale);
 
-    DrawRectangle(x + 1, y + 1, w, h, (Color){ 0, 0, 0, 60 });
-    drawRoundedRect(x, y, w, h, static_cast<int>(CARD_RADIUS * scale), (Color){ 20, 40, 120, 255 });
-    DrawRectangleLinesEx((Rectangle){ (float)x, (float)y, (float)w, (float)h },
-                         2.0f, (Color){ 60, 100, 200, 200 });
+    Color shadow = { 0, 0, 0, 60 };
+    Color backColor = { 20, 40, 120, 255 };
+    Color borderColor = { 60, 100, 200, 200 };
+    Color logoColor = { 255, 255, 255, 180 };
+    DrawRectangle(x + 1, y + 1, w, h, shadow);
+    drawRoundedRect(x, y, w, h, static_cast<int>(CARD_RADIUS * scale), backColor);
+    Rectangle borderRect = { (float)x, (float)y, (float)w, (float)h };
+    DrawRectangleLinesEx(borderRect, 2.0f, borderColor);
 
     int cx = x + w / 2, cy = y + h / 2;
     const char * logo = "UNO";
     int sz = static_cast<int>(24 * scale);
     int lw = MeasureText(logo, sz);
-    DrawText(logo, cx - lw / 2, cy - sz / 2, sz, (Color){ 255, 255, 255, 180 });
+    DrawText(logo, cx - lw / 2, cy - sz / 2, sz, logoColor);
 }
 
 void drawRoundedRect(int x, int y, int w, int h, int radius, Color color)
@@ -133,8 +145,8 @@ void drawRoundedRect(int x, int y, int w, int h, int radius, Color color)
         DrawRectangle(x, y, w, h, color);
         return;
     }
-    DrawRectangleRounded((Rectangle){ (float)x, (float)y, (float)w, (float)h },
-                         (float)radius / (float)std::min(w, h), 20, color);
+    Rectangle rect = { (float)x, (float)y, (float)w, (float)h };
+    DrawRectangleRounded(rect, (float)radius / (float)std::min(w, h), 20, color);
 }
 
 bool isHovered(int x, int y, int w, int h)

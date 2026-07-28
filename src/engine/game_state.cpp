@@ -1,6 +1,8 @@
 #include "game_state.h"
+#ifndef _WIN32
 #include "network_server.h"
 #include "network_client.h"
+#endif
 #include "bot_factory.h"
 #include "rules.h"
 #include "logger.h"
@@ -248,7 +250,7 @@ AppStateMachine::AppStateMachine(const GameConfig & cfg) : m_config(cfg)
     if (Settings::instance().getBool("audio.muted", false))
         AudioManager::instance().setMuted(true);
 
-    LOG_INFO("Game started");
+    LOG_INFO("%s", "Game started");
 }
 
 void AppStateMachine::run()
@@ -272,7 +274,8 @@ void AppStateMachine::run()
             if (m_currentId == AppStateId::PLAYING_LOCAL)
             {
                 BeginDrawing();
-                ClearBackground((Color){ 30, 80, 40, 255 });
+                Color bgColor = { 30, 80, 40, 255 };
+ClearBackground(bgColor);
                 m_currentState->render();
 
                 DebugOverlay::instance().update(GetFrameTime());

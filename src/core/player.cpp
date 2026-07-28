@@ -16,7 +16,7 @@ player::player(std::string name, PlayerType type, BotDifficulty diff)
     pdiff = diff;
 }
 
-void player::hand_add(card temp_card)
+void player::hand_add(const card & temp_card)
 {
     hand.push_back(temp_card);
 }

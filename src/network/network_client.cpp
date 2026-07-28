@@ -1,7 +1,6 @@
 #include "network_client.h"
 #include <iostream>
 #include <cstring>
-#include <cstdlib>
 #include <fcntl.h>
 #include <unistd.h>
 #include <netinet/in.h>

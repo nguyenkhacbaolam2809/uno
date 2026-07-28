@@ -130,3 +130,83 @@ AnimationManager (singleton)
 ```
 
 Easing functions: LINEAR, EASE_IN_QUAD, EASE_OUT_QUAD, EASE_IN_OUT_QUAD, EASE_OUT_BACK, EASE_OUT_ELASTIC, EASE_OUT_BOUNCE.
+
+## Network Protocol
+
+### Packet Framing
+All packets use length-prefixed TCP framing:
+
+```
+[4 bytes: total length (network order)]
+[1 byte: packet type]
+[1 byte: player ID]
+[N bytes: body]
+```
+
+### Packet Types
+
+| Type | Value | Body | Direction |
+|---|---|---|---|
+| PKT_HEARTBEAT | 0 | PacketVersion | Both |
+| PKT_PLAY_CARD | 1 | PacketPlayCard | Client→Server |
+| PKT_DRAW | 2 | empty | Client→Server |
+| PKT_JUMP_IN | 3 | PacketJumpIn | Client→Server |
+| PKT_CALL_UNO | 4 | empty | Client→Server |
+| PKT_CATCH_UNO | 5 | PacketUno | Client→Server |
+| PKT_SYNC_STATE | 6 | serialized GameState | Server→Client |
+
+### Protocol Version
+Current version: `1` (defined in `packets.h` as `PROTOCOL_VERSION`).
+The first packet from a client must include version information via
+`PKT_HEARTBEAT` with a `PacketVersion` body. Servers reject mismatched
+versions with a disconnection.
+
+### SyncState Serialization
+```
+[int: myPlayerId]
+[GameState: gs]
+[int: playerCount]
+  for each player:
+    [int: nameLen][char[]: name]
+    [int: cardCount][int: type][int: difficulty]
+    [card[]: hand]
+```
+
+## Class Relationships
+
+```
+┌──────────────┐     owns      ┌──────────────────┐
+│  GameEngine  │ ────────────► │     player[]     │
+│              │               │  ┌────────────┐  │
+│  ┌────────┐  │               │  │  card[]    │  │
+│  │  deck  │  │               │  └────────────┘  │
+│  └────────┘  │               └──────────────────┘
+│  ┌────────┐  │
+│  │  state │  │     uses      ┌──────────────────┐
+│  └────────┘  │ ────────────► │  IBotStrategy   │
+│  ┌────────┐  │               │  (polymorphic)  │
+│  │discard │  │               └──────────────────┘
+│  └────────┘  │
+└──────────────┘
+       │
+       │ creates
+       ▼
+┌──────────────┐
+│  GameState   │
+│  (plain data)│
+└──────────────┘
+```
+
+## Coding Conventions
+
+- **Language**: C++17 with strict flags (`-Wall -Wextra -Wpedantic -Wshadow -Werror`)
+- **Indentation**: 4 spaces
+- **Naming**: `snake_case` for functions/variables, `PascalCase` for classes
+- **Members**: `m_` prefix for private members
+- **Memory**: No raw `new`/`delete`; use `std::unique_ptr`, `std::vector`
+- **Namespaces**: No `using namespace std`; use explicit `std::` prefixes
+- **Enums**: `enum class` for new enumerations; underlying type specified
+- **Headers**: Include guards (`#ifndef`/`#define`/`#endif`), not `#pragma once`
+- **Const**: Mark member functions `const` where possible; use `constexpr` for constants
+- **Noexcept**: Mark functions `noexcept` where the implementation permits
+- **Error handling**: Use `Result<T>` or `std::optional` instead of sentinel values

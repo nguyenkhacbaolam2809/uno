@@ -1,15 +1,17 @@
 #include "game_view.h"
 #include "card_renderer.h"
 #include "rules.h"
+#include "colors.h"
 #include <cstring>
 #include <cstdio>
 #include <algorithm>
 
-static void drawTextCentered(const char * text, int y, int fontSize, Color col)
-{
-    int tw = MeasureText(text, fontSize);
-    DrawText(text, (SCREEN_W - tw) / 2, y, fontSize, col);
-}
+using uno::SCREEN_W;
+using uno::SCREEN_H;
+using uno::CARD_WIDTH;
+using uno::CARD_HEIGHT;
+using uno::BG_GREEN;
+using uno::GOLD_COLOR;
 
 void GameView::renderUnoButton(const GameEngine & engine, int localPlayerId)
 {
@@ -22,12 +24,13 @@ void GameView::renderUnoButton(const GameEngine & engine, int localPlayerId)
     if (!unoButtonEnabled) return;
 
     Rectangle btn = { (float)(SCREEN_W / 2 + 60), (float)(SCREEN_H - 80), 100, 40 };
-    Color baseColor = (Color){ 237, 28, 36, 255 };
+    Color baseColor = { 237, 28, 36, 255 };
     if (CheckCollisionPointRec(GetMousePosition(), btn))
         baseColor = Fade(baseColor, 0.7f);
     DrawRectangleRounded(btn, 0.3f, 10, baseColor);
-    DrawRectangleRoundedLines(btn, 0.3f, 10, 2, GOLD);
-    drawTextCentered("UNO!", SCREEN_H - 74, 22, GOLD);
+    DrawRectangleRoundedLines(btn, 0.3f, 10, 2, GOLD_COLOR);
+    int utw = MeasureText("UNO!", 22);
+    DrawText("UNO!", (SCREEN_W - utw) / 2, SCREEN_H - 74, 22, GOLD_COLOR);
 
     if (CheckCollisionPointRec(GetMousePosition(), btn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
     {
@@ -54,7 +57,7 @@ void GameView::renderCatchTargets(const GameEngine & engine, int localPlayerId)
 
     if (vulnerableOpponent < 0) return;
 
-    int slotW = 180, slotH = 80;
+    int slotW = 180;
     int gap = 20;
     int others = n - 1;
     int totalW = others * slotW + (others - 1) * gap;
@@ -69,9 +72,10 @@ void GameView::renderCatchTargets(const GameEngine & engine, int localPlayerId)
         {
             int x = startX + oppIdx * (slotW + gap);
             Rectangle r = { (float)x, (float)110, (float)slotW, 30 };
-            DrawRectangleRounded(r, 0.3f, 10, (Color){ 237, 28, 36, 200 });
+            Color catchBg = { 237, 28, 36, 200 };
+            DrawRectangleRounded(r, 0.3f, 10, catchBg);
             int tw = MeasureText("CATCH UNO?", 16);
-            DrawText("CATCH UNO?", x + (slotW - tw) / 2, 114, 16, GOLD);
+            DrawText("CATCH UNO?", x + (slotW - tw) / 2, 114, 16, GOLD_COLOR);
         }
         oppIdx++;
     }
@@ -85,11 +89,15 @@ void GameView::renderColorPicker()
     int tw = MeasureText(title, 28);
     DrawText(title, (SCREEN_W - tw) / 2, SCREEN_H / 2 - 120, 28, WHITE);
 
+    Color redCol = { 237, 28, 36, 255 };
+    Color blueCol = { 0, 114, 188, 255 };
+    Color greenCol = { 0, 155, 72, 255 };
+    Color yellowCol = { 255, 205, 0, 255 };
     struct { COLOR col; Color c; const char * label; } colors[4] = {
-        { red,    (Color){ 237, 28, 36, 255 },   "RED" },
-        { blue,   (Color){ 0, 114, 188, 255 },   "BLUE" },
-        { green,  (Color){ 0, 155, 72, 255 },    "GREEN" },
-        { yellow, (Color){ 255, 205, 0, 255 },   "YELLOW" }
+        { red,    redCol,    "RED" },
+        { blue,   blueCol,   "BLUE" },
+        { green,  greenCol,  "GREEN" },
+        { yellow, yellowCol, "YELLOW" }
     };
 
     int btnW = 120, btnH = 80, gap = 20;
@@ -106,7 +114,7 @@ void GameView::renderColorPicker()
         DrawRectangleRounded(r, 0.3f, 10, c);
 
         int lw = MeasureText(colors[i].label, 16);
-        DrawText(colors[i].label, (int)(r.x + (r.w - lw) / 2), (int)(r.y + (r.h - 20) / 2), 16, WHITE);
+        DrawText(colors[i].label, (int)(r.x + (r.width - lw) / 2), (int)(r.y + (r.height - 20) / 2), 16, WHITE);
 
         if (CheckCollisionPointRec(GetMousePosition(), r) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
         {
@@ -124,7 +132,8 @@ void GameView::renderMessageOverlay()
     int tw = MeasureText(overlayMsg.c_str(), 24);
     int mx = (SCREEN_W - tw) / 2 - 20;
     int my = SCREEN_H / 2 - 30;
-    DrawRectangle(mx, my, tw + 40, 60, (Color){ 0, 0, 0, 200 });
+    Color overlayBg = { 0, 0, 0, 200 };
+    DrawRectangle(mx, my, tw + 40, 60, overlayBg);
     DrawText(overlayMsg.c_str(), mx + 20, my + 18, 24, WHITE);
 }
 
@@ -218,7 +227,7 @@ void GameView::showGameOver(const GameEngine & engine)
         ClearBackground(BG_GREEN);
 
         int tw = MeasureText(msg.c_str(), 48);
-        DrawText(msg.c_str(), (SCREEN_W - tw) / 2, SCREEN_H / 2 - 60, 48, GOLD);
+        DrawText(msg.c_str(), (SCREEN_W - tw) / 2, SCREEN_H / 2 - 60, 48, GOLD_COLOR);
 
         const char * sub = "Press any key to continue";
         int sw = MeasureText(sub, 20);

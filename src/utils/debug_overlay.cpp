@@ -32,8 +32,11 @@ void DebugOverlay::render()
     // Background
     int w = 320;
     int h = (int)m_info.size() * lineH + lineH * 2 + 40;
-    DrawRectangle(x, y, w, h, (Color){ 0, 0, 0, 180 });
-    DrawRectangleLines(x, y, w, h, (Color){ 100, 100, 100, 200 });
+    Color bgColor = { 0, 0, 0, 180 };
+    Color borderColor = { 100, 100, 100, 200 };
+    Color graphBg = { 0, 0, 0, 100 };
+    DrawRectangle(x, y, w, h, bgColor);
+    DrawRectangleLines(x, y, w, h, borderColor);
 
     y += 10;
 
@@ -49,8 +52,9 @@ void DebugOverlay::render()
 
     for (auto & kv : m_info)
     {
+        Color infoColor = { 245, 245, 245, 255 };
         DrawText(TextFormat("%s: %s", kv.first.c_str(), kv.second.c_str()),
-                 x + 10, y, 14, WHITE_SMOKE);
+                 x + 10, y, 14, infoColor);
         y += lineH;
     }
 
@@ -58,7 +62,7 @@ void DebugOverlay::render()
     if (!m_fpsHistory.empty())
     {
         int gx = x + 10, gy = y + 10, gw = w - 20, gh = 50;
-        DrawRectangle(gx, gy, gw, gh, (Color){ 0, 0, 0, 100 });
+        DrawRectangle(gx, gy, gw, gh, graphBg);
         int n = (int)m_fpsHistory.size();
         float stepX = (float)gw / std::max(n, 2);
         float prevY = (float)gy;

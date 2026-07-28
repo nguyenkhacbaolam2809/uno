@@ -1,7 +1,7 @@
 #include "animation_manager.h"
+#include "rng.h"
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>
 
 float easeApply(EaseType type, float t)
 {
@@ -118,7 +118,7 @@ void ShakeAnim::update(float dt)
     m_elapsed += dt;
     float t = std::min(m_elapsed / m_duration, 1.0f);
     float decay = 1.0f - t;
-    float angle = (float)(rand() % 628) / 100.0f;
+    float angle = (float)(randomInt(0, 627)) / 100.0f;
     m_offset.x = std::cos(angle) * m_intensity * decay;
     m_offset.y = std::sin(angle) * m_intensity * decay;
     if (t >= 1.0f)
@@ -283,6 +283,7 @@ int AnimationManager::animateVec2(Vector2 start, Vector2 end, float duration,
 int AnimationManager::animateColor(Color start, Color end, float duration,
     std::function<void(Color)> onUpdate, EaseType ease)
 {
+    (void)onUpdate;
     auto anim = std::make_unique<ColorAnim>(start, end, duration, ease);
     int id = m_nextId++;
     // Poll-based: caller reads value each frame
@@ -302,6 +303,7 @@ int AnimationManager::delay(float duration, std::function<void()> onFinish)
 int AnimationManager::shake(float intensity, float duration,
     std::function<void(Vector2)> onUpdate)
 {
+    (void)onUpdate;
     auto anim = std::make_unique<ShakeAnim>(intensity, duration);
     int id = m_nextId++;
     m_animations.push_back({ id, std::move(anim) });

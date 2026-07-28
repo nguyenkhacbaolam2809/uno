@@ -11,7 +11,7 @@ public:
     void create();
     void quick_shuffle() noexcept;
     card draw();
-    int add_card(card c) noexcept;
+    int add_card(const card & c) noexcept;
     int get_size() const noexcept { return static_cast<int>(cards.size()); }
     void print_deck() const;
 

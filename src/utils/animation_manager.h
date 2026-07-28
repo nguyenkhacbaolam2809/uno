@@ -50,7 +50,7 @@ public:
     void onFinish(std::function<void()> cb) { m_onFinish = std::move(cb); }
 
 private:
-    float m_current;
+    float m_start, m_end, m_current;
     std::function<void()> m_onFinish;
 };
 

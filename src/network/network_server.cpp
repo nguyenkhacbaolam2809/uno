@@ -151,6 +151,24 @@ void NetworkServer::handleRead(int clientId)
     while (ctx.recvBuf.hasPacket())
     {
         auto pkt = ctx.recvBuf.readPacket();
+
+        // Protocol version validation: first packet must be version match
+        if (pkt.type == PKT_HEARTBEAT)
+        {
+            if (pkt.body.size() >= sizeof(PacketVersion))
+            {
+                const PacketVersion * pv = reinterpret_cast<const PacketVersion *>(pkt.body.data());
+                if (pv->version != PROTOCOL_VERSION)
+                {
+                    std::cerr << "Client " << clientId << ": protocol version mismatch "
+                              << (int)pv->version << " != " << PROTOCOL_VERSION << std::endl;
+                    handleClose(clientId);
+                    return;
+                }
+            }
+            continue;
+        }
+
         unsigned char pid = pkt.playerId;
 
         // Validate player ID
@@ -164,6 +182,14 @@ void NetworkServer::handleRead(int clientId)
         if (pkt.length < 2)
         {
             std::cerr << "Player " << clientId << ": packet too short" << std::endl;
+            continue;
+        }
+
+        // Body size sanity check
+        if (static_cast<int>(pkt.body.size()) > 4096)
+        {
+            std::cerr << "Player " << clientId << ": packet body too large: "
+                      << pkt.body.size() << std::endl;
             continue;
         }
 

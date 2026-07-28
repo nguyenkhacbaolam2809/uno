@@ -1,6 +1,13 @@
 #include "game_view.h"
 #include "card_renderer.h"
 #include "rules.h"
+#include "colors.h"
+
+using uno::SCREEN_W;
+using uno::SCREEN_H;
+using uno::CARD_WIDTH;
+using uno::CARD_HEIGHT;
+using uno::GOLD_COLOR;
 
 void GameView::renderHand(const GameEngine & engine, int localPlayerId)
 {
@@ -28,9 +35,9 @@ void GameView::renderHand(const GameEngine & engine, int localPlayerId)
 
         if (hov && isMyTurn)
         {
-            DrawRectangleRounded((Rectangle){ pos.x - 2, pos.y - 2, (float)CARD_WIDTH + 4,
-                                              (float)CARD_HEIGHT + 4 + lift },
-                                 0.3f, 10, Fade(GOLD, 0.4f));
+            Rectangle glowRect = { pos.x - 2, pos.y - 2, (float)CARD_WIDTH + 4,
+                                   (float)CARD_HEIGHT + 4 + lift };
+            DrawRectangleRounded(glowRect, 0.3f, 10, Fade(GOLD_COLOR, 0.4f));
         }
 
         card c = p->peek(i);
@@ -38,7 +45,7 @@ void GameView::renderHand(const GameEngine & engine, int localPlayerId)
     }
 }
 
-Vector2 GameView::getHandCardPos(int index, int total)
+Vector2 GameView::getHandCardPos(int index, int total) const
 {
     float overlap = (total > 7) ? 50.0f : 70.0f;
     float totalW = overlap * (total - 1) + CARD_WIDTH;
@@ -47,7 +54,7 @@ Vector2 GameView::getHandCardPos(int index, int total)
     return { startX + index * overlap, baseY };
 }
 
-Rectangle GameView::getCardRect(int index, int total)
+Rectangle GameView::getCardRect(int index, int total) const
 {
     Vector2 p = getHandCardPos(index, total);
     return { p.x, p.y, (float)CARD_WIDTH, (float)CARD_HEIGHT };

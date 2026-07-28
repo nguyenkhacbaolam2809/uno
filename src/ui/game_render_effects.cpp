@@ -5,6 +5,12 @@
 #include "animation_manager.h"
 #include <cmath>
 
+using uno::SCREEN_W;
+using uno::SCREEN_H;
+using uno::CARD_WIDTH;
+using uno::CARD_HEIGHT;
+using uno::GOLD_COLOR;
+
 // Visual effects that enhance the game experience.
 // These are lightweight on purpose — no per-frame allocations.
 
@@ -21,8 +27,8 @@ void GameView::renderWinConfetti(const GameEngine & engine)
     cfg.lifeMax = 2.5f;
     cfg.sizeMin = 3;
     cfg.sizeMax = 8;
-    cfg.colorStart = GOLD;
-    cfg.colorEnd = Fade(GOLD, 0);
+    cfg.colorStart = GOLD_COLOR;
+    cfg.colorEnd = Fade(GOLD_COLOR, 0);
     cfg.spread = 360;
 
     static double lastBurst = 0;
@@ -39,7 +45,7 @@ void GameView::renderCardGlow(const card & c, int x, int y, float scale)
     (void)c;
     int w = static_cast<int>(CARD_WIDTH * scale);
     int h = static_cast<int>(CARD_HEIGHT * scale);
-    Color glow = Fade(GOLD, 0.15f + 0.1f * std::sin(GetTime() * 4));
-    DrawRectangleRounded((Rectangle){ (float)x - 3, (float)y - 3, (float)w + 6, (float)h + 6 },
-                         0.3f, 15, glow);
+    Color glow = Fade(GOLD_COLOR, 0.15f + 0.1f * std::sin(GetTime() * 4));
+    Rectangle glowRect = { (float)x - 3, (float)y - 3, (float)w + 6, (float)h + 6 };
+    DrawRectangleRounded(glowRect, 0.3f, 15, glow);
 }

@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-ubuntu:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        build-type: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libxrandr-dev libxinerama-dev libxcursor-dev \
+            libxi-dev libgl1-mesa-dev libasound2-dev \
+            clang-tidy cppcheck lcov
+
+      - name: Configure
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} \
+            -DENABLE_SANITIZERS=ON -DBUILD_TESTS=ON
+
+      - name: Build
+        run: cmake --build build --parallel $(nproc)
+
+      - name: Run tests
+        run: ./build/test_all
+
+      - name: Run clang-tidy
+        run: |
+          find src/ -name '*.cpp' | xargs clang-tidy -p build/ --quiet 2>/dev/null || true
+
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        build-type: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} \
+            -DENABLE_SANITIZERS=OFF
+
+      - name: Build
+        run: cmake --build build --config ${{ matrix.build-type }}
+
+  coverage:
+    runs-on: ubuntu-latest
+    needs: build-ubuntu
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libxrandr-dev libxinerama-dev libxcursor-dev \
+            libxi-dev libgl1-mesa-dev lcov
+
+      - name: Configure with coverage
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug \
+            -DENABLE_SANITIZERS=ON -DBUILD_TESTS=ON \
+            -DCMAKE_CXX_FLAGS="--coverage -O0"
+
+      - name: Build
+        run: cmake --build build --parallel $(nproc)
+
+      - name: Run tests with coverage
+        run: |
+          ./build/test_all
+          find . -name '*.gcda' -o -name '*.gcno' | head -20
+
+      - name: Generate coverage report
+        run: |
+          sudo apt-get install -y lcov
+          lcov --capture --directory . --output-file coverage.info --rc lcov_branch_coverage=1 2>/dev/null || true
+          lcov --remove coverage.info '/usr/*' '*/raylib-*' '*/tests/*' --output-file coverage.info 2>/dev/null || true
+          genhtml coverage.info --output-directory coverage_report 2>/dev/null || true
+          echo "Coverage report: coverage_report/index.html"

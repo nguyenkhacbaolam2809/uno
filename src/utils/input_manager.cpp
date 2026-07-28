@@ -1,5 +1,12 @@
 #include "input_manager.h"
 #include <algorithm>
+#include <cmath>
+
+InputManager & InputManager::instance()
+{
+    static InputManager inst;
+    return inst;
+}
 
 void InputManager::update()
 {
@@ -18,7 +25,9 @@ void InputManager::update()
             m_lastClickPos[i] = m_mousePos;
 
             float timeSince = GetTime() - m_lastClickTime[i];
-            float dist = Vector2Distance(m_mousePos, m_lastClickPos[i]);
+            float dx = m_mousePos.x - m_lastClickPos[i].x;
+    float dy = m_mousePos.y - m_lastClickPos[i].y;
+    float dist = std::sqrt(dx * dx + dy * dy);
             if (timeSince < 0.3f && dist < 10.0f)
                 m_clickCount[i]++;
             else

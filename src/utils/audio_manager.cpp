@@ -19,11 +19,11 @@ bool AudioManager::init()
     InitAudioDevice();
     if (!IsAudioDeviceReady())
     {
-        LOG_ERROR("Failed to initialize audio device");
+        LOG_ERROR("%s", "Failed to initialize audio device");
         return false;
     }
     m_initialized = true;
-    LOG_INFO("Audio device initialized");
+    LOG_INFO("%s", "Audio device initialized");
     return true;
 }
 

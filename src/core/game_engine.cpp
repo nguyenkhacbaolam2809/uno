@@ -3,7 +3,6 @@
 #include "rules.h"
 #include "rng.h"
 #include <cstring>
-#include <iostream>
 
 GameEngine::GameEngine(const GameConfig & cfg, bool viet)
     : config(cfg), vietRules(viet)

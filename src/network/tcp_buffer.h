@@ -5,7 +5,13 @@
 #include <cstdint>
 #include <cstring>
 #include <algorithm>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#else
 #include <sys/socket.h>
+#include <arpa/inet.h>
+#endif
 
 constexpr int BUFFER_SIZE = 65536;
 

@@ -1,18 +1,27 @@
 #ifndef PACKETS_H
 #define PACKETS_H
 
-const int DEFAULT_PORT = 8888;
-const int BUFFER_SIZE = 4096;
-const int MAX_CLIENTS = 4;
+#include <cstdint>
+
+constexpr int DEFAULT_PORT = 8888;
+constexpr int BUFFER_SIZE = 4096;
+constexpr int MAX_CLIENTS = 4;
+constexpr int PROTOCOL_VERSION = 1;
 
 enum PacketType : unsigned char
 {
+    PKT_HEARTBEAT,
     PKT_PLAY_CARD,
     PKT_DRAW,
     PKT_JUMP_IN,
     PKT_CALL_UNO,
     PKT_CATCH_UNO,
     PKT_SYNC_STATE
+};
+
+struct PacketVersion
+{
+    unsigned char version;
 };
 
 #pragma pack(push, 1)

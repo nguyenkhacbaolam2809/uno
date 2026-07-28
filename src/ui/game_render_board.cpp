@@ -3,6 +3,13 @@
 #include "colors.h"
 #include <cstring>
 
+using uno::SCREEN_W;
+using uno::SCREEN_H;
+using uno::CARD_WIDTH;
+using uno::CARD_HEIGHT;
+using uno::BG_GREEN;
+using uno::GOLD_COLOR;
+
 // Background rendering
 void GameView::renderBackground()
 {
@@ -26,16 +33,18 @@ void GameView::renderPiles(const GameEngine & engine)
     int drawX = cx - pileW - 60;
     int drawY = cy - pileH / 2;
 
-    DrawRectangleRounded((Rectangle){ (float)drawX, (float)drawY, (float)pileW, (float)pileH },
-                         0.3f, 10, (Color){ 0, 0, 0, 100 });
+    Color pileBg = { 0, 0, 0, 100 };
+    Rectangle pileRect = { (float)drawX, (float)drawY, (float)pileW, (float)pileH };
+    DrawRectangleRounded(pileRect, 0.3f, 10, pileBg);
     card_renderer::drawBack(drawX + 4, drawY + 4, 1.0f);
     DrawText("DRAW", drawX + 10, drawY + pileH + 8, 14, Fade(WHITE, 0.6f));
 
     int discX = cx + 20;
     int discY = cy - pileH / 2;
 
-    DrawRectangleRounded((Rectangle){ (float)discX, (float)discY, (float)pileW, (float)pileH },
-                         0.3f, 10, (Color){ 0, 0, 0, 80 });
+    Color discBg = { 0, 0, 0, 80 };
+    Rectangle discRect = { (float)discX, (float)discY, (float)pileW, (float)pileH };
+    DrawRectangleRounded(discRect, 0.3f, 10, discBg);
 
     card current = engine.getCurrentCard();
     card_renderer::drawCard(current, discX + 4, discY + 4, 1.0f);
@@ -45,12 +54,12 @@ void GameView::renderPiles(const GameEngine & engine)
     {
         std::string forced = TextFormat("FORCED DRAW: %d", engine.getDrawStack());
         int fw = MeasureText(forced.c_str(), 20);
-        DrawText(forced.c_str(), cx - fw / 2, cy + pileH / 2 + 30, 20,
-                 (Color){ 255, 100, 100, 255 });
+        Color forcedColor = { 255, 100, 100, 255 };
+        DrawText(forced.c_str(), cx - fw / 2, cy + pileH / 2 + 30, 20, forcedColor);
     }
 
     int dirX = cx - 10;
     int dirY = cy - pileH / 2 - 40;
     const char * dirText = engine.getDirection() == 1 ? "\xe2\x86\x91" : "\xe2\x86\x93";
-    DrawText(dirText, dirX, dirY, 32, Fade(GOLD, 0.8f));
+    DrawText(dirText, dirX, dirY, 32, Fade(GOLD_COLOR, 0.8f));
 }
