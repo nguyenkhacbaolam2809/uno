@@ -4,16 +4,16 @@
 #include "card.h"
 #include <vector>
 
-class deck {
+class deck final {
 public:
     deck();
 
     void create();
-    void quick_shuffle();
+    void quick_shuffle() noexcept;
     card draw();
-    int add_card(card c);
-    int get_size() const;
-    void print_deck();
+    int add_card(card c) noexcept;
+    int get_size() const noexcept { return static_cast<int>(cards.size()); }
+    void print_deck() const;
 
 private:
     std::vector<card> cards;

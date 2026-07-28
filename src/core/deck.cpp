@@ -1,5 +1,5 @@
 #include "deck.h"
-#include <cstdlib>
+#include "rng.h"
 #include <iostream>
 
 deck::deck()
@@ -55,7 +55,7 @@ void deck::quick_shuffle()
     int n = static_cast<int>(cards.size());
     for (int i = n - 1; i > 0; i--)
     {
-        int j = rand() % (i + 1);
+        int j = randomInt(0, i);
         card temp = cards[i];
         cards[i] = cards[j];
         cards[j] = temp;

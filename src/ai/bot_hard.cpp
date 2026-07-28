@@ -1,5 +1,4 @@
 #include "bot_hard.h"
-#include <cstdlib>
 #include <cstring>
 
 HardBotStrategy::HardBotStrategy()

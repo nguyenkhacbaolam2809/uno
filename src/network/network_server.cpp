@@ -153,6 +153,20 @@ void NetworkServer::handleRead(int clientId)
         auto pkt = ctx.recvBuf.readPacket();
         unsigned char pid = pkt.playerId;
 
+        // Validate player ID
+        if (pid >= static_cast<unsigned char>(engine.getPlayerCount()))
+        {
+            std::cerr << "Player " << clientId << ": invalid pid=" << (int)pid << std::endl;
+            continue;
+        }
+
+        // Validate packet length against expected minimum
+        if (pkt.length < 2)
+        {
+            std::cerr << "Player " << clientId << ": packet too short" << std::endl;
+            continue;
+        }
+
         switch (pkt.type)
         {
             case PKT_PLAY_CARD:
@@ -160,9 +174,9 @@ void NetworkServer::handleRead(int clientId)
                 if (pkt.body.size() >= sizeof(PacketPlayCard))
                 {
                     const PacketPlayCard * pc = reinterpret_cast<const PacketPlayCard *>(pkt.body.data());
-                    const char * colorNames[] = {"", "do", "xanh la", "xanh duong", "vang"};
                     if (pc->chosenColor >= 1 && pc->chosenColor <= 4)
                     {
+                        const char * colorNames[] = {"", "do", "xanh la", "xanh duong", "vang"};
                         engine.playCard(pid, pc->cardIndex, colorNames[pc->chosenColor]);
                         broadcastSyncState();
                     }
@@ -170,8 +184,11 @@ void NetworkServer::handleRead(int clientId)
                 break;
             }
             case PKT_DRAW:
-                engine.drawCard(pid);
-                broadcastSyncState();
+                if (pkt.body.size() == 0)
+                {
+                    engine.drawCard(pid);
+                    broadcastSyncState();
+                }
                 break;
             case PKT_JUMP_IN:
                 if (pkt.body.size() >= sizeof(PacketJumpIn))
@@ -182,17 +199,22 @@ void NetworkServer::handleRead(int clientId)
                 }
                 break;
             case PKT_CALL_UNO:
-                engine.callUno(pid);
+                if (pkt.body.size() == 0)
+                    engine.callUno(pid);
                 break;
             case PKT_CATCH_UNO:
                 if (pkt.body.size() >= sizeof(PacketUno))
                 {
                     const PacketUno * pu = reinterpret_cast<const PacketUno *>(pkt.body.data());
-                    engine.catchUno(pid, pu->targetId);
-                    broadcastSyncState();
+                    if (pu->targetId < static_cast<unsigned char>(engine.getPlayerCount()))
+                    {
+                        engine.catchUno(pid, pu->targetId);
+                        broadcastSyncState();
+                    }
                 }
                 break;
             default:
+                std::cerr << "Player " << clientId << ": unknown packet type " << (int)pkt.type << std::endl;
                 break;
         }
     }
@@ -335,7 +357,7 @@ void NetworkServer::runGameLoop()
 
     while (running && !engine.isGameOver())
     {
-        int n = epoll_wait(epollFd, events, 16, 100);
+        int n = epoll_wait(epollFd, events, 16, 50);
         if (n < 0) continue;
 
         for (int i = 0; i < n; i++)

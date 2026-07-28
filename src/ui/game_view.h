@@ -47,12 +47,12 @@ private:
     InteractionResult pendingResult;
     bool needsColorPick;
     COLOR pickedColor;
-    bool showUnoButton;
-
     std::string overlayMsg;
     float overlayTimer;
 
-    int catchTarget;
+    bool unoButtonEnabled;
+    int vulnerableOpponent;
+    int handScrollOffset;
 
     void renderBackground();
     void renderOpponents(const GameEngine & engine, int localPlayerId);
@@ -61,10 +61,12 @@ private:
     void renderTurnIndicator(const GameEngine & engine, int localPlayerId);
     void renderColorPicker();
     void renderMessageOverlay();
-    void renderGameOver(const GameEngine & engine);
+    void renderUnoButton(const GameEngine & engine, int localPlayerId);
+    void renderCatchTargets(const GameEngine & engine, int localPlayerId);
 
     void handleHandClick(const GameEngine & engine, int localPlayerId);
-    int cardAtPos(Vector2 mouse, int localPlayerId);
+    void handleUnoCatchClick(const GameEngine & engine, int localPlayerId);
+    int cardAtPos(Vector2 mouse, const GameEngine & engine, int localPlayerId) const;
 
     Vector2 getHandCardPos(int index, int total);
     Rectangle getCardRect(int index, int total);

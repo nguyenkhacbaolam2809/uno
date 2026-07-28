@@ -3,7 +3,7 @@
 
 #include <ostream>
 
-enum COLOR { wild, red, green, blue, yellow};
+enum COLOR : unsigned char { wild, red, green, blue, yellow };
 
 constexpr int CARD_DRAW_TWO = 10;
 constexpr int CARD_SKIP    = 11;
@@ -16,15 +16,15 @@ constexpr int MAX_PLAYERS  = 5;
 
 class card
 {
-    public:
-        int number;
-        COLOR color;
+public:
+    int number;
+    COLOR color;
 
-        bool operator==(card const & other) const;
-        bool operator!=(card const & other) const;
+    bool operator==(card const & other) const;
+    bool operator!=(card const & other) const;
 
-        card();
-        card(int num, COLOR col);
+    card();
+    card(int num, COLOR col);
 };
 
 std::ostream & operator<<(std::ostream & out, card const & temp_card);

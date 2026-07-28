@@ -5,8 +5,8 @@
 #include <string>
 #include <vector>
 
-enum PlayerType { HUMAN, BOT };
-enum BotDifficulty { D_EASY, D_NORMAL, D_HARD };
+enum PlayerType : unsigned char { HUMAN, BOT };
+enum BotDifficulty : unsigned char { D_EASY, D_NORMAL, D_HARD };
 
 class player
 {

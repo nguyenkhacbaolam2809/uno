@@ -1,7 +1,7 @@
 #include "game_engine.h"
 #include "bot_factory.h"
 #include "rules.h"
-#include <cstdlib>
+#include "rng.h"
 #include <cstring>
 #include <iostream>
 
@@ -72,7 +72,7 @@ void GameEngine::chooseRandomStarter()
         if (c.color != wild)
         {
             state.currentCard = c;
-            state.turn = rand() % playerCount;
+            state.turn = randomInt(0, playerCount - 1);
             return;
         }
         discardPile.add_card(c);

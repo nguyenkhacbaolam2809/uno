@@ -9,14 +9,13 @@
 #include <ctime>
 #include <cassert>
 #include <string>
-using namespace std;
 
 int testsPassed = 0;
 int testsFailed = 0;
 
 #define TEST(name, expr) do { \
     if (!(expr)) { \
-        cerr << "FAIL: " << name << " (" << #expr << ")" << endl; \
+        std::cerr << "FAIL: " << name << " (" << #expr << ")" << std::endl; \
         testsFailed++; \
     } else { \
         testsPassed++; \
@@ -303,27 +302,25 @@ void testRulesIntegration()
 
 int main()
 {
-    srand(time(NULL));
+    std::cout << "=== Running Unit Tests ===" << std::endl << std::endl;
 
-    cout << "=== Running Unit Tests ===" << endl << endl;
-
-    cout << "--- Card & Rules Tests ---" << endl;
+    std::cout << "--- Card & Rules Tests ---" << std::endl;
     testCard();
     testRulesIntegration();
 
-    cout << endl << "--- Deck Tests ---" << endl;
+    std::cout << std::endl << "--- Deck Tests ---" << std::endl;
     testDeck();
 
-    cout << endl << "--- Player Tests ---" << endl;
+    std::cout << std::endl << "--- Player Tests ---" << std::endl;
     testPlayer();
 
-    cout << endl << "--- Game Engine Tests ---" << endl;
+    std::cout << std::endl << "--- Game Engine Tests ---" << std::endl;
     testGameEngine();
     testBot();
 
-    cout << endl << "=== Results ===" << endl;
-    cout << "Passed: " << testsPassed << endl;
-    cout << "Failed: " << testsFailed << endl;
+    std::cout << std::endl << "=== Results ===" << std::endl;
+    std::cout << "Passed: " << testsPassed << std::endl;
+    std::cout << "Failed: " << testsFailed << std::endl;
 
     return testsFailed > 0 ? 1 : 0;
 }

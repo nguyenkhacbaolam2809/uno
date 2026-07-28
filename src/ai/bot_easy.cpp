@@ -1,5 +1,5 @@
 #include "bot_easy.h"
-#include <cstdlib>
+#include "rng.h"
 
 int EasyBotStrategy::pickCard(player * self, const card & current,
                               int, int, const int *, int, int)
@@ -15,8 +15,7 @@ int EasyBotStrategy::pickCard(player * self, const card & current,
 
 COLOR EasyBotStrategy::pickColor(player *)
 {
-    int r = rand() % 4;
-    return static_cast<COLOR>(r + 1);
+    return static_cast<COLOR>(randomInt(1, 4));
 }
 
 bool EasyBotStrategy::shouldJumpIn(player * self, const card & target)

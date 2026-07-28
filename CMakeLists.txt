@@ -55,12 +55,32 @@ target_include_directories(network PUBLIC
 
 target_link_libraries(network PUBLIC gamecore)
 
+add_library(utils
+    src/utils/logger.cpp
+    src/utils/input_manager.cpp
+    src/utils/asset_manager.cpp
+    src/utils/animation_manager.cpp
+    src/utils/particle_system.cpp
+    src/utils/debug_overlay.cpp
+    src/utils/audio_manager.cpp
+)
+
+target_include_directories(utils PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/utils
+)
+
 add_executable(gameuno
     main.cpp
     src/ui/gui.cpp
     src/ui/card_renderer.cpp
     src/ui/game_view.cpp
+    src/ui/game_render_board.cpp
+    src/ui/game_render_cards.cpp
+    src/ui/game_render_players.cpp
+    src/ui/game_render_ui.cpp
+    src/ui/game_render_effects.cpp
     src/ui/menu_view.cpp
+    src/engine/game_state.cpp
 )
 
 target_include_directories(gameuno PRIVATE
@@ -68,25 +88,31 @@ target_include_directories(gameuno PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core
     ${CMAKE_CURRENT_SOURCE_DIR}/src/ai
     ${CMAKE_CURRENT_SOURCE_DIR}/src/network
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/utils
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/engine
 )
 
 target_link_libraries(gameuno
     gamecore
     network
+    utils
     raylib
 )
 
 if(ENABLE_SANITIZERS)
     target_compile_options(gamecore PRIVATE -fsanitize=address,undefined)
     target_compile_options(network PRIVATE -fsanitize=address,undefined)
+    target_compile_options(utils PRIVATE -fsanitize=address,undefined)
     target_compile_options(gameuno PRIVATE -fsanitize=address,undefined)
     target_link_libraries(gamecore PRIVATE -fsanitize=address,undefined)
     target_link_libraries(network PRIVATE -fsanitize=address,undefined)
+    target_link_libraries(utils PRIVATE -fsanitize=address,undefined)
     target_link_libraries(gameuno PRIVATE -fsanitize=address,undefined)
 endif()
 
 target_compile_options(gamecore PRIVATE -Wall -Wextra -Wshadow -Wpedantic -Werror)
 target_compile_options(network PRIVATE -Wall -Wextra -Wshadow -Wpedantic -Werror)
+target_compile_options(utils PRIVATE -Wall -Wextra -Wshadow -Wpedantic -Werror)
 target_compile_options(gameuno PRIVATE -Wall -Wextra -Wshadow -Wpedantic -Werror -O2)
 
 if(BUILD_TESTS)
@@ -97,6 +123,7 @@ if(BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/core
         ${CMAKE_CURRENT_SOURCE_DIR}/src/ai
         ${CMAKE_CURRENT_SOURCE_DIR}/src/network
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/utils
     )
     target_link_libraries(test_all gamecore)
     target_compile_options(test_all PRIVATE -Wall -Wextra -Wshadow -Wpedantic -Werror -O2)
