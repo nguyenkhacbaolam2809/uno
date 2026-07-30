@@ -100,7 +100,6 @@ public:
 
 private:
     GameConfig config;
-    bool vietRules;
 
     Deck mainDeck;
     Deck discardPile;

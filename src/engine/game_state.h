@@ -39,7 +39,6 @@ public:
 private:
     std::unique_ptr<MenuView> m_menuView;
     MenuResult m_result;
-    bool m_done{false};
 };
 
 struct LobbyConfig {

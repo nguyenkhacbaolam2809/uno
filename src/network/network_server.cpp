@@ -10,7 +10,7 @@
 #include <arpa/inet.h>
 
 NetworkServer::NetworkServer(const GameConfig & cfg, bool viet)
-    : config(cfg), vietRules(viet), engine(cfg, viet),
+    : config(cfg), engine(cfg, viet),
       listenFd(-1), epollFd(-1), clientCount(0), running(false)
 {
 }
@@ -283,7 +283,6 @@ void NetworkServer::handleClose(int clientId)
 void NetworkServer::broadcastSyncState()
 {
     GameState gs = engine.getState();
-    gs.vietRules = vietRules;
 
     int playerDataSize = 0;
     for (int i = 0; i < engine.getPlayerCount(); i++)

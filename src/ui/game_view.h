@@ -11,6 +11,15 @@
 #include <vector>
 #include <string>
 
+// Shared rendering helpers used by both render() and renderSync()
+void drawOpponentSlot(int x, int y, int slotW, int slotH,
+                      const std::string & name, int cardCount,
+                      bool isCurrentTurn, bool hasOneCard);
+void drawGameOverText(const std::string & winnerText);
+void drawPileStack(int cx, int cy, int pileW, int pileH);
+void drawDiscardPile(int cx, int cy, int pileW, int pileH, const Card & currentCard);
+void drawDirectionIndicator(int cx, int cy, int pileH, int direction);
+void drawForceDrawText(int cx, int cy, int pileH, int drawStack);
 
 enum class PlayerAction {
     NONE,

@@ -49,6 +49,8 @@ public:
         int height;
     };
     const CachedText * getCachedText(const std::string & text, int fontSize, Color color);
+    void drawCachedText(const std::string & text, int posX, int posY, int fontSize, Color color);
+    Vector2 measureCachedText(const std::string & text, int fontSize) const;
     void clearTextCache();
 
 private:

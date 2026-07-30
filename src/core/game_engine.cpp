@@ -4,14 +4,14 @@
 #include "rng.h"
 
 GameEngine::GameEngine(const GameConfig & cfg, bool viet)
-    : config(cfg), vietRules(viet)
+    : config(cfg)
 {
     state.turn = 0;
     state.direction = 1;
     state.phase = GamePhase::Deal;
     state.forceDraw = false;
     state.drawStack = 0;
-    state.vietRules = vietRules;
+    state.vietRules = viet;
     state.winner = -1;
     state.playerCount = 0;
     state.jumpState = JumpInState::None;
@@ -156,7 +156,7 @@ bool GameEngine::playCard(int playerIdx, int cardIdx, CardColor chosenColor)
     if (chosen.number == CARD_WILD_DRAW_FOUR && !::canPlayWildDrawFour(chosen, state.currentCard, players[playerIdx]))
         return false;
 
-    if (vietRules && players[playerIdx].get_size() == 1 && !::isLegalLastCard(chosen))
+    if (state.vietRules && players[playerIdx].get_size() == 1 && !::isLegalLastCard(chosen))
         return false;
 
     players[playerIdx].hand_remove(cardIdx);
@@ -235,7 +235,7 @@ void GameEngine::reshuffleDiscard()
 
 bool GameEngine::jumpIn(int playerIdx, int cardIdx)
 {
-    if (!vietRules) return false;
+    if (!state.vietRules) return false;
     if (playerIdx < 0 || playerIdx >= playerCount) return false;
     if (cardIdx < 0 || cardIdx >= players[playerIdx].get_size()) return false;
     if (state.jumpState != JumpInState::Available) return false;
@@ -273,7 +273,7 @@ void GameEngine::callUno(int playerIdx)
 
 void GameEngine::catchUno(int callerIdx, int targetIdx)
 {
-    if (!vietRules) return;
+    if (!state.vietRules) return;
     if (targetIdx < 0 || targetIdx >= playerCount) return;
     if (players[targetIdx].get_size() != 1) return;
 

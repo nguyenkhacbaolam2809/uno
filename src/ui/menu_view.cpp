@@ -11,9 +11,7 @@ using uno::BG_DARK;
 using uno::GOLD_COLOR;
 using uno::WHITE_SMOKE;
 
-MenuView::MenuView(const GameConfig & cfg) : config(cfg)
-{
-}
+MenuView::MenuView(const GameConfig & cfg) : config(cfg) {}
 
 const char * MenuView::msg(int id) const
 {
@@ -39,7 +37,7 @@ const char * MenuView::msg(int id) const
             case 16: return "Port:";
             case 17: return "Back";
             case 18: return "Start Game";
-            case 19: return "Vietnamese Rules? (Y/N)";
+            case 19: return "Vietnamese Rules?";
             case 20: return "Choose a color:";
             case 21: return "Number of bots:";
             case 22: return "Number of humans:";
@@ -66,7 +64,7 @@ const char * MenuView::msg(int id) const
         case 16: return "Cong:";
         case 17: return "Quay lai";
         case 18: return "Bat dau";
-        case 19: return "Luat Viet Nam? (C/K)";
+        case 19: return "Luat Viet Nam?";
         case 20: return "Chon mau:";
         case 21: return "So Bot:";
         case 22: return "So nguoi:";
@@ -115,522 +113,547 @@ bool MenuView::drawButton(Button & btn)
     return btn.hovered && IsMouseButtonPressed(MOUSE_LEFT_BUTTON);
 }
 
+// --- Blocking show() (wraps step() in a loop for backward compat) ---
 MenuResult MenuView::show()
 {
-    return showMainMenu();
+    return runBlocking(MenuPhase::Main);
 }
 
-MenuResult MenuView::showMainMenu()
+MenuResult MenuView::runBlocking(MenuPhase phase)
 {
+    resetTo(phase);
     while (!WindowShouldClose())
     {
         BeginDrawing();
         ClearBackground(BG_DARK);
-
-        drawTitle(msg(1), 60, 80, GOLD_COLOR);
-        drawTextCentered("Multiplayer Card Game", 140, 24, WHITE_SMOKE);
-
-        int bw = 300, bh = 50, bx = (SCREEN_W - bw) / 2, by = 200, gap = 15;
-
-        Color redBtn = { 237, 28, 36, 255 };
-        Color blueBtn = { 0, 114, 188, 255 };
-        Color greenBtn = { 0, 155, 72, 255 };
-        Color brownBtn = { 180, 100, 20, 255 };
-        Color grayBtn = { 80, 80, 80, 255 };
-        std::vector<Button> btns;
-        btns.push_back(makeButton(bx, by, bw, bh, msg(2), redBtn));
-        btns.push_back(makeButton(bx, by + (bh + gap) * 1, bw, bh, msg(3), blueBtn));
-        btns.push_back(makeButton(bx, by + (bh + gap) * 2, bw, bh, msg(4), greenBtn));
-        btns.push_back(makeButton(bx, by + (bh + gap) * 3, bw, bh, msg(5), brownBtn));
-        btns.push_back(makeButton(bx, by + (bh + gap) * 4, bw, bh, msg(6), grayBtn));
-
-        for (auto & btn : btns)
-        {
-            if (drawButton(btn))
-            {
-                EndDrawing();
-                if (btn.text == msg(2)) return showDifficultySelect();
-                if (btn.text == msg(3)) return showLocalSetup();
-                if (btn.text == msg(4)) return showMixedSetup();
-                if (btn.text == msg(5)) return showLanMenu();
-                if (btn.text == msg(6))
-                {
-                    MenuResult r;
-                    r.action = -1;
-                    r.confirmed = true;
-                    return r;
-                }
-            }
-        }
-
+        drawCurrentMenu();
         EndDrawing();
-    }
 
-    MenuResult r;
-    r.action = -1;
-    r.confirmed = true;
-    return r;
+        if (step()) break;
+    }
+    return m_stepResult;
 }
 
-MenuResult MenuView::showDifficultySelect()
+void MenuView::resetTo(const MenuPhase & phase)
 {
-    MenuResult result;
-    result.action = 1;
-    result.botDifficulty = 1;
-    result.numHumans = 1;
-    result.numBots = 1;
-    result.vietRules = false;
-    result.confirmed = false;
-    result.port = 8888;
-
-    char nameBuf[64] = "Player";
-    int nameLen = (int)std::strlen(nameBuf);
-    bool editingName = false;
-
-    int diffChoice = 1;
-
-    while (!WindowShouldClose())
-    {
-        BeginDrawing();
-        ClearBackground(BG_DARK);
-
-        drawTitle(msg(2), 40, 48, GOLD_COLOR);
-
-        int bw = 260, bh = 44, gap = 12;
-        int startY = 120;
-
-        drawTextCentered(msg(7), startY, 22, WHITE_SMOKE);
-        std::vector<Button> diffBtns;
-        Color diffEasy = { 0, 155, 72, 255 };
-        Color diffMed = { 180, 140, 20, 255 };
-        Color diffHard = { 237, 28, 36, 255 };
-        diffBtns.push_back(makeButton((SCREEN_W - bw) / 2, startY + 40, bw, bh, msg(8), diffEasy));
-        diffBtns.push_back(makeButton((SCREEN_W - bw) / 2, startY + 40 + (bh + gap), bw, bh, msg(9), diffMed));
-        diffBtns.push_back(makeButton((SCREEN_W - bw) / 2, startY + 40 + (bh + gap) * 2, bw, bh, msg(10), diffHard));
-
-        for (int i = 0; i < 3; i++)
-        {
-            if (drawButton(diffBtns[i]))
-            {
-                diffChoice = i + 1;
-                result.botDifficulty = i + 1;
-            }
-            if (i == diffChoice - 1)
-            {
-                DrawRectangleRoundedLines(diffBtns[i].rect, 0.3f, 10, 3, GOLD_COLOR);
-            }
-        }
-
-        drawTextCentered(msg(11), startY + 200, 20, WHITE_SMOKE);
-
-        Rectangle nameRect = { (float)(SCREEN_W / 2 - 150), (float)(startY + 230), 300, 40 };
-        Color nameRectColor = { 60, 60, 70, 255 };
-        DrawRectangleRounded(nameRect, 0.3f, 10, nameRectColor);
-        if (editingName)
-            DrawRectangleRoundedLines(nameRect, 0.3f, 10, 2, GOLD_COLOR);
-
-        DrawText(nameBuf, (int)nameRect.x + 10, (int)nameRect.y + 8, 22, WHITE);
-
-        if (IsKeyPressed(KEY_ENTER)) editingName = !editingName;
-        if (editingName)
-        {
-            int k = GetCharPressed();
-            while (k > 0)
-            {
-                if (k >= 32 && k <= 126 && nameLen < 62)
-                {
-                    nameBuf[nameLen] = (char)k;
-                    nameLen++;
-                    nameBuf[nameLen] = 0;
-                }
-                k = GetCharPressed();
-            }
-            if (IsKeyPressed(KEY_BACKSPACE) && nameLen > 0)
-            {
-                nameLen--;
-                nameBuf[nameLen] = 0;
-            }
-        }
-
-        int numBots = result.numBots;
-        drawTextCentered(msg(21), startY + 290, 20, WHITE_SMOKE);
-        DrawText(TextFormat("%d", numBots), SCREEN_W / 2 - 10, startY + 320, 28, WHITE);
-
-        Rectangle minusRect2 = { (float)(SCREEN_W / 2 - 60), (float)(startY + 320), 40, 30 };
-        Rectangle plusRect2 = { (float)(SCREEN_W / 2 + 20), (float)(startY + 320), 40, 30 };
-        Color minusColor = { 200, 60, 60, 255 };
-        Color plusColor = { 60, 200, 60, 255 };
-        DrawRectangleRounded(minusRect2, 0.3f, 10, minusColor);
-        DrawRectangleRounded(plusRect2, 0.3f, 10, plusColor);
-        DrawText("-", (int)minusRect2.x + 13, (int)minusRect2.y + 2, 24, WHITE);
-        DrawText("+", (int)plusRect2.x + 12, (int)plusRect2.y + 2, 24, WHITE);
-        if (CheckCollisionPointRec(GetMousePosition(), minusRect2) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-            numBots = std::max(1, numBots - 1);
-        if (CheckCollisionPointRec(GetMousePosition(), plusRect2) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-            numBots = std::min(4, numBots + 1);
-
-        result.numBots = numBots;
-        result.numHumans = 1;
-
-        Rectangle vietBtn = { (float)(SCREEN_W / 2 - 150), (float)(startY + 380), 300, 40 };
-        Color vietOn = { 0, 200, 100, 255 };
-        Color vietOff = { 80, 80, 90, 255 };
-        Color vietCol = result.vietRules ? vietOn : vietOff;
-        DrawRectangleRounded(vietBtn, 0.3f, 10, vietCol);
-        drawTextCentered(msg(19), startY + 383, 18, WHITE);
-        if (CheckCollisionPointRec(GetMousePosition(), vietBtn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-            result.vietRules = !result.vietRules;
-
-        Rectangle startBtn = { (float)(SCREEN_W / 2 - 100), (float)(startY + 440), 200, 50 };
-        Color startBtnColor = { 0, 155, 72, 255 };
-        DrawRectangleRounded(startBtn, 0.3f, 10, startBtnColor);
-        drawTextCentered(msg(18), startY + 445, 22, WHITE);
-        if (CheckCollisionPointRec(GetMousePosition(), startBtn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-        {
-            result.playerName = nameBuf;
-            result.confirmed = true;
-            EndDrawing();
-            return result;
-        }
-
-        EndDrawing();
-    }
-
-    result.confirmed = false;
-    result.action = -1;
-    return result;
+    m_phase = phase;
 }
 
-MenuResult MenuView::showLocalSetup()
+// --- Step: one frame of input ---
+bool MenuView::step()
 {
-    MenuResult result;
-    result.action = 2;
-    result.numHumans = 2;
-    result.numBots = 0;
-    result.vietRules = false;
-    result.confirmed = false;
-    result.port = 8888;
+    if (m_phase == MenuPhase::Done) return true;
 
-    while (!WindowShouldClose())
+    switch (m_phase)
     {
-        BeginDrawing();
-        ClearBackground(BG_DARK);
-
-        drawTitle(msg(3), 40, 48, GOLD_COLOR);
-
-        drawTextCentered(msg(12), 130, 22, WHITE_SMOKE);
-
-        int nPlayers = result.numHumans;
-
-        Rectangle minusRect = { (float)(SCREEN_W / 2 - 60), 170, 40, 40 };
-        Rectangle plusRect = { (float)(SCREEN_W / 2 + 20), 170, 40, 40 };
-
-        Color minusColor = { 200, 60, 60, 255 };
-        Color plusColor = { 60, 200, 60, 255 };
-        DrawRectangleRounded(minusRect, 0.3f, 10, minusColor);
-        DrawRectangleRounded(plusRect, 0.3f, 10, plusColor);
-        DrawText("-", (int)minusRect.x + 12, (int)minusRect.y + 6, 28, WHITE);
-        DrawText("+", (int)plusRect.x + 10, (int)plusRect.y + 6, 28, WHITE);
-        DrawText(TextFormat("%d", nPlayers), SCREEN_W / 2 - 12, 175, 32, WHITE);
-
-        if (CheckCollisionPointRec(GetMousePosition(), minusRect) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-            nPlayers = std::max(2, nPlayers - 1);
-        if (CheckCollisionPointRec(GetMousePosition(), plusRect) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-            nPlayers = std::min(4, nPlayers + 1);
-        result.numHumans = nPlayers;
-
-        Rectangle vietBtn = { (float)(SCREEN_W / 2 - 150), 240, 300, 40 };
-        Color vietOn = { 0, 200, 100, 255 };
-        Color vietOff = { 80, 80, 90, 255 };
-        Color vietCol = result.vietRules ? vietOn : vietOff;
-        DrawRectangleRounded(vietBtn, 0.3f, 10, vietCol);
-        drawTextCentered(msg(19), 243, 18, WHITE);
-        if (CheckCollisionPointRec(GetMousePosition(), vietBtn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-            result.vietRules = !result.vietRules;
-
-        Rectangle startBtn = { (float)(SCREEN_W / 2 - 100), 310, 200, 50 };
-        Color startBtnColor = { 0, 155, 72, 255 };
-        DrawRectangleRounded(startBtn, 0.3f, 10, startBtnColor);
-        drawTextCentered(msg(18), 315, 22, WHITE);
-        if (CheckCollisionPointRec(GetMousePosition(), startBtn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-        {
-            result.confirmed = true;
-            EndDrawing();
-            return result;
-        }
-
-        EndDrawing();
+        case MenuPhase::Main:        stepMain();        break;
+        case MenuPhase::Difficulty:  stepDifficulty();  break;
+        case MenuPhase::LocalSetup:  stepLocalSetup();  break;
+        case MenuPhase::MixedSetup:  stepMixedSetup();  break;
+        case MenuPhase::Lan:         stepLan();         break;
+        case MenuPhase::ColorPicker: stepColorPicker(); break;
+        default: break;
     }
-
-    result.action = -1;
-    result.confirmed = false;
-    return result;
+    return m_phase == MenuPhase::Done;
 }
 
-MenuResult MenuView::showMixedSetup()
+// --- Draw current menu ---
+void MenuView::drawCurrentMenu()
 {
-    MenuResult result;
-    result.action = 3;
-    result.numHumans = 1;
-    result.numBots = 1;
-    result.botDifficulty = 1;
-    result.vietRules = false;
-    result.confirmed = false;
-    result.port = 8888;
-
-    while (!WindowShouldClose())
+    ClearBackground(BG_DARK);
+    switch (m_phase)
     {
-        BeginDrawing();
-        ClearBackground(BG_DARK);
-
-        drawTitle(msg(4), 40, 48, GOLD_COLOR);
-
-        drawTextCentered(msg(22), 120, 20, WHITE_SMOKE);
-        drawTextCentered(msg(21), 200, 20, WHITE_SMOKE);
-
-        int nHumans = result.numHumans;
-        int nBots = result.numBots;
-
-        DrawText(TextFormat("%d", nHumans), SCREEN_W / 2 - 60, 140, 32, WHITE);
-        DrawText(TextFormat("%d", nBots), SCREEN_W / 2 - 60, 220, 32, WHITE);
-
-        Rectangle hMinus = { (float)(SCREEN_W / 2 - 100), 140, 30, 30 };
-        Rectangle hPlus  = { (float)(SCREEN_W / 2 - 30), 140, 30, 30 };
-        Rectangle bMinus = { (float)(SCREEN_W / 2 - 100), 220, 30, 30 };
-        Rectangle bPlus  = { (float)(SCREEN_W / 2 - 30), 220, 30, 30 };
-        Color minusColor = { 200, 60, 60, 255 };
-        Color plusColor = { 60, 200, 60, 255 };
-        DrawRectangleRounded(hMinus, 0.3f, 10, minusColor);
-        DrawRectangleRounded(hPlus, 0.3f, 10, plusColor);
-        DrawRectangleRounded(bMinus, 0.3f, 10, minusColor);
-        DrawRectangleRounded(bPlus, 0.3f, 10, plusColor);
-        DrawText("-", (int)hMinus.x + 8, (int)hMinus.y + 2, 24, WHITE);
-        DrawText("+", (int)hPlus.x + 7, (int)hPlus.y + 2, 24, WHITE);
-        DrawText("-", (int)bMinus.x + 8, (int)bMinus.y + 2, 24, WHITE);
-        DrawText("+", (int)bPlus.x + 7, (int)bPlus.y + 2, 24, WHITE);
-        if (CheckCollisionPointRec(GetMousePosition(), hMinus) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-            nHumans = std::max(1, nHumans - 1);
-        if (CheckCollisionPointRec(GetMousePosition(), hPlus) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-            nHumans = std::min(4, nHumans + 1);
-        if (CheckCollisionPointRec(GetMousePosition(), bMinus) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-            nBots = std::max(0, nBots - 1);
-        if (CheckCollisionPointRec(GetMousePosition(), bPlus) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-            nBots = std::min(4, nBots + 1);
-        result.numHumans = nHumans;
-        result.numBots = nBots;
-
-        drawTextCentered(msg(7), 280, 20, WHITE_SMOKE);
-
-        std::vector<Button> diffBtns;
-        int bw = 200, bh = 36, gap = 8;
-        int startX = (SCREEN_W - bw) / 2;
-        Color diffEasy = { 0, 155, 72, 255 };
-        Color diffMed = { 180, 140, 20, 255 };
-        Color diffHard = { 237, 28, 36, 255 };
-        diffBtns.push_back(makeButton(startX, 310, bw, bh, msg(8), diffEasy));
-        diffBtns.push_back(makeButton(startX, 310 + (bh + gap), bw, bh, msg(9), diffMed));
-        diffBtns.push_back(makeButton(startX, 310 + (bh + gap) * 2, bw, bh, msg(10), diffHard));
-
-        for (int i = 0; i < 3; i++)
-        {
-            if (drawButton(diffBtns[i])) result.botDifficulty = i + 1;
-            if (i == result.botDifficulty - 1)
-                DrawRectangleRoundedLines(diffBtns[i].rect, 0.3f, 10, 3, GOLD_COLOR);
-        }
-
-        Rectangle vietBtn = { (float)(SCREEN_W / 2 - 150), 430, 300, 40 };
-        Color vietOn = { 0, 200, 100, 255 };
-        Color vietOff = { 80, 80, 90, 255 };
-        Color vietCol = result.vietRules ? vietOn : vietOff;
-        DrawRectangleRounded(vietBtn, 0.3f, 10, vietCol);
-        drawTextCentered(msg(19), 433, 18, WHITE);
-        if (CheckCollisionPointRec(GetMousePosition(), vietBtn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-            result.vietRules = !result.vietRules;
-
-        Rectangle startBtn = { (float)(SCREEN_W / 2 - 100), 490, 200, 50 };
-        Color startBtnColor = { 0, 155, 72, 255 };
-        DrawRectangleRounded(startBtn, 0.3f, 10, startBtnColor);
-        drawTextCentered(msg(18), 495, 22, WHITE);
-        if (CheckCollisionPointRec(GetMousePosition(), startBtn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-        {
-            result.confirmed = true;
-            EndDrawing();
-            return result;
-        }
-
-        EndDrawing();
+        case MenuPhase::Main:        drawMain();        break;
+        case MenuPhase::Difficulty:  drawDifficulty();  break;
+        case MenuPhase::LocalSetup:  drawLocalSetup();  break;
+        case MenuPhase::MixedSetup:  drawMixedSetup();  break;
+        case MenuPhase::Lan:         drawLan();         break;
+        case MenuPhase::ColorPicker: drawColorPicker(); break;
+        default: break;
     }
-
-    result.action = -1;
-    result.confirmed = false;
-    return result;
 }
 
-MenuResult MenuView::showColorPicker()
+// ==================== MAIN MENU ====================
+void MenuView::stepMain()
 {
-    MenuResult result;
-    result.confirmed = true;
-    result.action = 6;
+    int bw = 300, bh = 50, bx = (SCREEN_W - bw) / 2, by = 200, gap = 15;
 
-    while (!WindowShouldClose())
+    Color redBtn = { 237, 28, 36, 255 };
+    Color blueBtn = { 0, 114, 188, 255 };
+    Color greenBtn = { 0, 155, 72, 255 };
+    Color brownBtn = { 180, 100, 20, 255 };
+    Color grayBtn = { 80, 80, 80, 255 };
+
+    std::vector<Button> btns;
+    btns.push_back(makeButton(bx, by, bw, bh, msg(2), redBtn));
+    btns.push_back(makeButton(bx, by + (bh + gap) * 1, bw, bh, msg(3), blueBtn));
+    btns.push_back(makeButton(bx, by + (bh + gap) * 2, bw, bh, msg(4), greenBtn));
+    btns.push_back(makeButton(bx, by + (bh + gap) * 3, bw, bh, msg(5), brownBtn));
+    btns.push_back(makeButton(bx, by + (bh + gap) * 4, bw, bh, msg(6), grayBtn));
+
+    for (size_t i = 0; i < btns.size(); i++)
     {
-        BeginDrawing();
-        ClearBackground(BG_DARK);
-
-        drawTitle(msg(20), SCREEN_H / 2 - 160, 36, WHITE_SMOKE);
-
-        Color redCol = { 237, 28, 36, 255 };
-        Color blueCol = { 0, 114, 188, 255 };
-        Color greenCol = { 0, 155, 72, 255 };
-        Color yellowCol = { 255, 205, 0, 255 };
-        struct { int id; Color c; const char * label; } colors[4] = {
-            { 1, redCol, "RED" },
-            { 2, blueCol, "BLUE" },
-            { 3, greenCol, "GREEN" },
-            { 4, yellowCol, "YELLOW" }
-        };
-
-        int btnW = 120, btnH = 80, gap = 20;
-        int totalW = 4 * btnW + 3 * gap;
-        int startX = (SCREEN_W - totalW) / 2;
-        int startY = SCREEN_H / 2 - btnH / 2;
-
-        for (int i = 0; i < 4; i++)
+        if (drawButton(btns[i]))
         {
-            Rectangle r = { (float)(startX + i * (btnW + gap)), (float)startY, (float)btnW, (float)btnH };
-            Color c = colors[i].c;
-            if (CheckCollisionPointRec(GetMousePosition(), r))
-                c = Fade(c, 0.7f);
-            DrawRectangleRounded(r, 0.3f, 10, c);
-
-            int lw = MeasureText(colors[i].label, 16);
-            DrawText(colors[i].label, (int)(r.x + (r.width - lw) / 2), (int)(r.y + (r.height - 16) / 2), 16, WHITE);
-
-            if (CheckCollisionPointRec(GetMousePosition(), r) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+            if (i == 0) { m_phase = MenuPhase::Difficulty; resetTo(MenuPhase::Difficulty); return; }
+            if (i == 1) { m_phase = MenuPhase::LocalSetup; resetTo(MenuPhase::LocalSetup); return; }
+            if (i == 2) { m_phase = MenuPhase::MixedSetup; resetTo(MenuPhase::MixedSetup); return; }
+            if (i == 3) { m_phase = MenuPhase::Lan;        resetTo(MenuPhase::Lan);        return; }
+            if (i == 4)
             {
-                result.action = colors[i].id;
-                EndDrawing();
-                return result;
+                m_stepResult.action = -1;
+                m_stepResult.confirmed = true;
+                m_phase = MenuPhase::Done;
+                return;
             }
         }
-
-        Rectangle backBtn = { (float)(SCREEN_W / 2 - 70), (float)(startY + btnH + 40), 140, 40 };
-        DrawRectangleRounded(backBtn, 0.3f, 10, Color{ 80, 80, 80, 255 });
-        drawTextCentered(msg(17), startY + btnH + 44, 20, WHITE);
-        if (CheckCollisionPointRec(GetMousePosition(), backBtn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-        {
-            result.action = -1;
-            result.confirmed = false;
-            EndDrawing();
-            return result;
-        }
-
-        EndDrawing();
     }
-
-    result.action = -1;
-    result.confirmed = false;
-    return result;
 }
 
-MenuResult MenuView::showLanMenu()
+void MenuView::drawMain()
 {
-    MenuResult result;
-    result.action = 4;
-    result.confirmed = false;
-    result.port = 8888;
-    result.serverIp = "127.0.0.1";
+    drawTitle(msg(1), 60, 80, GOLD_COLOR);
+    drawTextCentered("Multiplayer Card Game", 140, 24, WHITE_SMOKE);
+}
 
-    char ipBuf[64] = "127.0.0.1";
-    int ipLen = (int)std::strlen(ipBuf);
-    char portBuf[8] = "8888";
-    int portLen = 4;
-    bool editingIp = false, editingPort = false;
+// ==================== DIFFICULTY SELECT ====================
+void MenuView::stepDifficulty()
+{
+    int bw = 260, bh = 44, gap = 12;
+    int startY = 120;
 
-    while (!WindowShouldClose())
+    Color diffEasy = { 0, 155, 72, 255 };
+    Color diffMed = { 180, 140, 20, 255 };
+    Color diffHard = { 237, 28, 36, 255 };
+
+    std::vector<Button> diffBtns;
+    diffBtns.push_back(makeButton((SCREEN_W - bw) / 2, startY + 40, bw, bh, msg(8), diffEasy));
+    diffBtns.push_back(makeButton((SCREEN_W - bw) / 2, startY + 40 + (bh + gap), bw, bh, msg(9), diffMed));
+    diffBtns.push_back(makeButton((SCREEN_W - bw) / 2, startY + 40 + (bh + gap) * 2, bw, bh, msg(10), diffHard));
+
+    for (int i = 0; i < 3; i++)
+        if (drawButton(diffBtns[i])) m_diffChoice = i + 1;
+
+    // Name editing
+    if (IsKeyPressed(KEY_ENTER)) m_stringEditing = !m_stringEditing;
+    if (m_stringEditing)
     {
-        BeginDrawing();
-        ClearBackground(BG_DARK);
-
-        drawTitle(msg(5), 40, 48, GOLD_COLOR);
-
-        int bw = 260, bh = 50, gap = 20;
-        int bx = (SCREEN_W - bw) / 2;
-        int by = 160;
-
-        Color hostBtnColor = { 0, 114, 188, 255 };
-        Color joinBtnColor = { 0, 155, 72, 255 };
-        Button hostBtn = makeButton(bx, by, bw, bh, msg(13), hostBtnColor);
-        Button joinBtn = makeButton(bx, by + bh + gap, bw, bh, msg(14), joinBtnColor);
-
-        if (drawButton(hostBtn))
+        int k = GetCharPressed();
+        while (k > 0)
         {
-            result.action = 4;
-            result.confirmed = true;
-            EndDrawing();
-            return result;
+            if (k >= 32 && k <= 126 && m_nameLen < 62)
+            { m_nameBuf[m_nameLen] = (char)k; m_nameLen++; m_nameBuf[m_nameLen] = 0; }
+            k = GetCharPressed();
         }
-
-        if (drawButton(joinBtn))
-        {
-            result.action = 5;
-            result.confirmed = true;
-            result.port = std::atoi(portBuf);
-            result.serverIp = ipBuf;
-            EndDrawing();
-            return result;
-        }
-
-        drawTextCentered(msg(15), by + 140, 20, WHITE_SMOKE);
-        Rectangle ipRect = { (float)(SCREEN_W / 2 - 150), (float)(by + 170), 300, 36 };
-        Color ipRectColor = { 60, 60, 70, 255 };
-        DrawRectangleRounded(ipRect, 0.3f, 10, ipRectColor);
-        if (editingIp) DrawRectangleRoundedLines(ipRect, 0.3f, 10, 2, GOLD_COLOR);
-        DrawText(ipBuf, (int)ipRect.x + 10, (int)ipRect.y + 6, 20, WHITE);
-        if (CheckCollisionPointRec(GetMousePosition(), ipRect) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-        { editingIp = true; editingPort = false; }
-
-        drawTextCentered(msg(16), by + 230, 20, WHITE_SMOKE);
-        Rectangle portRect = { (float)(SCREEN_W / 2 - 150), (float)(by + 260), 300, 36 };
-        Color portRectColor = { 60, 60, 70, 255 };
-        DrawRectangleRounded(portRect, 0.3f, 10, portRectColor);
-        if (editingPort) DrawRectangleRoundedLines(portRect, 0.3f, 10, 2, GOLD_COLOR);
-        DrawText(portBuf, (int)portRect.x + 10, (int)portRect.y + 6, 20, WHITE);
-        if (CheckCollisionPointRec(GetMousePosition(), portRect) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-        { editingPort = true; editingIp = false; }
-
-        if (editingIp)
-        {
-            int k = GetCharPressed();
-            while (k > 0)
-            {
-                if (k >= 32 && k <= 126 && ipLen < 62)
-                { ipBuf[ipLen] = (char)k; ipLen++; ipBuf[ipLen] = 0; }
-                k = GetCharPressed();
-            }
-            if (IsKeyPressed(KEY_BACKSPACE) && ipLen > 0)
-            { ipLen--; ipBuf[ipLen] = 0; }
-            if (IsKeyPressed(KEY_ENTER)) editingIp = false;
-        }
-
-        if (editingPort)
-        {
-            int k = GetCharPressed();
-            while (k > 0)
-            {
-                if (k >= '0' && k <= '9' && portLen < 6)
-                { portBuf[portLen] = (char)k; portLen++; portBuf[portLen] = 0; }
-                k = GetCharPressed();
-            }
-            if (IsKeyPressed(KEY_BACKSPACE) && portLen > 0)
-            { portLen--; portBuf[portLen] = 0; }
-            if (IsKeyPressed(KEY_ENTER)) editingPort = false;
-        }
-
-        EndDrawing();
+        if (IsKeyPressed(KEY_BACKSPACE) && m_nameLen > 0)
+        { m_nameLen--; m_nameBuf[m_nameLen] = 0; }
     }
 
-    result.action = -1;
-    result.confirmed = false;
-    return result;
+    // Bot count
+    Rectangle minusRect2 = { (float)(SCREEN_W / 2 - 60), (float)(startY + 320), 40, 30 };
+    Rectangle plusRect2 = { (float)(SCREEN_W / 2 + 20), (float)(startY + 320), 40, 30 };
+    if (CheckCollisionPointRec(GetMousePosition(), minusRect2) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        m_botCount = std::max(1, m_botCount - 1);
+    if (CheckCollisionPointRec(GetMousePosition(), plusRect2) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        m_botCount = std::min(4, m_botCount + 1);
+
+    // Viet rules toggle
+    Rectangle vietBtn = { (float)(SCREEN_W / 2 - 150), (float)(startY + 380), 300, 40 };
+    if (CheckCollisionPointRec(GetMousePosition(), vietBtn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        m_vietRules = !m_vietRules;
+
+    // Start button
+    Rectangle startBtn = { (float)(SCREEN_W / 2 - 100), (float)(startY + 440), 200, 50 };
+    if (CheckCollisionPointRec(GetMousePosition(), startBtn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+    {
+        m_stepResult.action = 1;
+        m_stepResult.botDifficulty = m_diffChoice;
+        m_stepResult.numHumans = 1;
+        m_stepResult.numBots = m_botCount;
+        m_stepResult.playerName = m_nameBuf;
+        m_stepResult.vietRules = m_vietRules;
+        m_stepResult.confirmed = true;
+        m_phase = MenuPhase::Done;
+    }
+}
+
+void MenuView::drawDifficulty()
+{
+    int startY = 120;
+    drawTitle(msg(2), 40, 48, GOLD_COLOR);
+    drawTextCentered(msg(7), startY, 22, WHITE_SMOKE);
+
+    int bw = 260, bh = 44, gap = 12;
+    Color diffEasy = { 0, 155, 72, 255 };
+    Color diffMed = { 180, 140, 20, 255 };
+    Color diffHard = { 237, 28, 36, 255 };
+    std::vector<Button> diffBtns;
+    diffBtns.push_back(makeButton((SCREEN_W - bw) / 2, startY + 40, bw, bh, msg(8), diffEasy));
+    diffBtns.push_back(makeButton((SCREEN_W - bw) / 2, startY + 40 + (bh + gap), bw, bh, msg(9), diffMed));
+    diffBtns.push_back(makeButton((SCREEN_W - bw) / 2, startY + 40 + (bh + gap) * 2, bw, bh, msg(10), diffHard));
+
+    for (int i = 0; i < 3; i++)
+    {
+        drawButton(const_cast<Button&>(diffBtns[i]));
+        if (i == m_diffChoice - 1)
+            DrawRectangleRoundedLines(diffBtns[i].rect, 0.3f, 10, 3, GOLD_COLOR);
+    }
+
+    drawTextCentered(msg(11), startY + 200, 20, WHITE_SMOKE);
+    Rectangle nameRect = { (float)(SCREEN_W / 2 - 150), (float)(startY + 230), 300, 40 };
+    Color nameRectColor = { 60, 60, 70, 255 };
+    DrawRectangleRounded(nameRect, 0.3f, 10, nameRectColor);
+    if (m_stringEditing)
+        DrawRectangleRoundedLines(nameRect, 0.3f, 10, 2, GOLD_COLOR);
+    DrawText(m_nameBuf, (int)nameRect.x + 10, (int)nameRect.y + 8, 22, WHITE);
+
+    drawTextCentered(msg(21), startY + 290, 20, WHITE_SMOKE);
+    DrawText(TextFormat("%d", m_botCount), SCREEN_W / 2 - 10, startY + 320, 28, WHITE);
+
+    Rectangle minusRect2 = { (float)(SCREEN_W / 2 - 60), (float)(startY + 320), 40, 30 };
+    Rectangle plusRect2 = { (float)(SCREEN_W / 2 + 20), (float)(startY + 320), 40, 30 };
+    Color minusColor = { 200, 60, 60, 255 };
+    Color plusColor = { 60, 200, 60, 255 };
+    DrawRectangleRounded(minusRect2, 0.3f, 10, minusColor);
+    DrawRectangleRounded(plusRect2, 0.3f, 10, plusColor);
+    DrawText("-", (int)minusRect2.x + 13, (int)minusRect2.y + 2, 24, WHITE);
+    DrawText("+", (int)plusRect2.x + 12, (int)plusRect2.y + 2, 24, WHITE);
+
+    Rectangle vietBtn = { (float)(SCREEN_W / 2 - 150), (float)(startY + 380), 300, 40 };
+    Color vietOn = { 0, 200, 100, 255 };
+    Color vietOff = { 80, 80, 90, 255 };
+    DrawRectangleRounded(vietBtn, 0.3f, 10, m_vietRules ? vietOn : vietOff);
+    drawTextCentered(msg(19), startY + 383, 18, WHITE);
+
+    Rectangle startBtn = { (float)(SCREEN_W / 2 - 100), (float)(startY + 440), 200, 50 };
+    Color startBtnColor = { 0, 155, 72, 255 };
+    DrawRectangleRounded(startBtn, 0.3f, 10, startBtnColor);
+    drawTextCentered(msg(18), startY + 445, 22, WHITE);
+}
+
+// ==================== LOCAL SETUP ====================
+void MenuView::stepLocalSetup()
+{
+    Rectangle minusRect = { (float)(SCREEN_W / 2 - 60), 170, 40, 40 };
+    Rectangle plusRect = { (float)(SCREEN_W / 2 + 20), 170, 40, 40 };
+
+    if (CheckCollisionPointRec(GetMousePosition(), minusRect) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        m_humanCount = std::max(2, m_humanCount - 1);
+    if (CheckCollisionPointRec(GetMousePosition(), plusRect) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        m_humanCount = std::min(4, m_humanCount + 1);
+
+    Rectangle vietBtn = { (float)(SCREEN_W / 2 - 150), 240, 300, 40 };
+    if (CheckCollisionPointRec(GetMousePosition(), vietBtn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        m_vietRules = !m_vietRules;
+
+    Rectangle startBtn = { (float)(SCREEN_W / 2 - 100), 310, 200, 50 };
+    if (CheckCollisionPointRec(GetMousePosition(), startBtn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+    {
+        m_stepResult.action = 2;
+        m_stepResult.numHumans = m_humanCount;
+        m_stepResult.numBots = 0;
+        m_stepResult.vietRules = m_vietRules;
+        m_stepResult.confirmed = true;
+        m_phase = MenuPhase::Done;
+    }
+}
+
+void MenuView::drawLocalSetup()
+{
+    drawTitle(msg(3), 40, 48, GOLD_COLOR);
+    drawTextCentered(msg(12), 130, 22, WHITE_SMOKE);
+
+    int nPlayers = m_humanCount;
+
+    Rectangle minusRect = { (float)(SCREEN_W / 2 - 60), 170, 40, 40 };
+    Rectangle plusRect = { (float)(SCREEN_W / 2 + 20), 170, 40, 40 };
+    Color minusColor = { 200, 60, 60, 255 };
+    Color plusColor = { 60, 200, 60, 255 };
+    DrawRectangleRounded(minusRect, 0.3f, 10, minusColor);
+    DrawRectangleRounded(plusRect, 0.3f, 10, plusColor);
+    DrawText("-", (int)minusRect.x + 12, (int)minusRect.y + 6, 28, WHITE);
+    DrawText("+", (int)plusRect.x + 10, (int)plusRect.y + 6, 28, WHITE);
+    DrawText(TextFormat("%d", nPlayers), SCREEN_W / 2 - 12, 175, 32, WHITE);
+
+    Rectangle vietBtn = { (float)(SCREEN_W / 2 - 150), 240, 300, 40 };
+    Color vietOn = { 0, 200, 100, 255 };
+    Color vietOff = { 80, 80, 90, 255 };
+    DrawRectangleRounded(vietBtn, 0.3f, 10, m_vietRules ? vietOn : vietOff);
+    drawTextCentered(msg(19), 243, 18, WHITE);
+
+    Rectangle startBtn = { (float)(SCREEN_W / 2 - 100), 310, 200, 50 };
+    Color startBtnColor = { 0, 155, 72, 255 };
+    DrawRectangleRounded(startBtn, 0.3f, 10, startBtnColor);
+    drawTextCentered(msg(18), 315, 22, WHITE);
+}
+
+// ==================== MIXED SETUP ====================
+void MenuView::stepMixedSetup()
+{
+    Rectangle hMinus = { (float)(SCREEN_W / 2 - 100), 140, 30, 30 };
+    Rectangle hPlus  = { (float)(SCREEN_W / 2 - 30), 140, 30, 30 };
+    Rectangle bMinus = { (float)(SCREEN_W / 2 - 100), 220, 30, 30 };
+    Rectangle bPlus  = { (float)(SCREEN_W / 2 - 30), 220, 30, 30 };
+
+    if (CheckCollisionPointRec(GetMousePosition(), hMinus) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        m_humanCount = std::max(1, m_humanCount - 1);
+    if (CheckCollisionPointRec(GetMousePosition(), hPlus) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        m_humanCount = std::min(4, m_humanCount + 1);
+    if (CheckCollisionPointRec(GetMousePosition(), bMinus) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        m_botCount = std::max(0, m_botCount - 1);
+    if (CheckCollisionPointRec(GetMousePosition(), bPlus) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        m_botCount = std::min(4, m_botCount + 1);
+
+    int bw = 200, bh = 36, gap = 8;
+    int startX = (SCREEN_W - bw) / 2;
+    Color diffEasy = { 0, 155, 72, 255 };
+    Color diffMed = { 180, 140, 20, 255 };
+    Color diffHard = { 237, 28, 36, 255 };
+    std::vector<Button> diffBtns;
+    diffBtns.push_back(makeButton(startX, 310, bw, bh, msg(8), diffEasy));
+    diffBtns.push_back(makeButton(startX, 310 + (bh + gap), bw, bh, msg(9), diffMed));
+    diffBtns.push_back(makeButton(startX, 310 + (bh + gap) * 2, bw, bh, msg(10), diffHard));
+
+    for (int i = 0; i < 3; i++)
+        if (drawButton(diffBtns[i])) m_diffChoice = i + 1;
+
+    Rectangle vietBtn = { (float)(SCREEN_W / 2 - 150), 430, 300, 40 };
+    if (CheckCollisionPointRec(GetMousePosition(), vietBtn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        m_vietRules = !m_vietRules;
+
+    Rectangle startBtn = { (float)(SCREEN_W / 2 - 100), 490, 200, 50 };
+    if (CheckCollisionPointRec(GetMousePosition(), startBtn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+    {
+        m_stepResult.action = 3;
+        m_stepResult.numHumans = m_humanCount;
+        m_stepResult.numBots = m_botCount;
+        m_stepResult.botDifficulty = m_diffChoice;
+        m_stepResult.vietRules = m_vietRules;
+        m_stepResult.confirmed = true;
+        m_phase = MenuPhase::Done;
+    }
+}
+
+void MenuView::drawMixedSetup()
+{
+    drawTitle(msg(4), 40, 48, GOLD_COLOR);
+    drawTextCentered(msg(22), 120, 20, WHITE_SMOKE);
+    drawTextCentered(msg(21), 200, 20, WHITE_SMOKE);
+
+    DrawText(TextFormat("%d", m_humanCount), SCREEN_W / 2 - 60, 140, 32, WHITE);
+    DrawText(TextFormat("%d", m_botCount), SCREEN_W / 2 - 60, 220, 32, WHITE);
+
+    Rectangle hMinus = { (float)(SCREEN_W / 2 - 100), 140, 30, 30 };
+    Rectangle hPlus  = { (float)(SCREEN_W / 2 - 30), 140, 30, 30 };
+    Rectangle bMinus = { (float)(SCREEN_W / 2 - 100), 220, 30, 30 };
+    Rectangle bPlus  = { (float)(SCREEN_W / 2 - 30), 220, 30, 30 };
+    Color minusColor = { 200, 60, 60, 255 };
+    Color plusColor = { 60, 200, 60, 255 };
+    DrawRectangleRounded(hMinus, 0.3f, 10, minusColor);
+    DrawRectangleRounded(hPlus, 0.3f, 10, plusColor);
+    DrawRectangleRounded(bMinus, 0.3f, 10, minusColor);
+    DrawRectangleRounded(bPlus, 0.3f, 10, plusColor);
+    DrawText("-", (int)hMinus.x + 8, (int)hMinus.y + 2, 24, WHITE);
+    DrawText("+", (int)hPlus.x + 7, (int)hPlus.y + 2, 24, WHITE);
+    DrawText("-", (int)bMinus.x + 8, (int)bMinus.y + 2, 24, WHITE);
+    DrawText("+", (int)bPlus.x + 7, (int)bPlus.y + 2, 24, WHITE);
+
+    drawTextCentered(msg(7), 280, 20, WHITE_SMOKE);
+
+    int bw = 200, bh = 36, gap = 8;
+    int startX = (SCREEN_W - bw) / 2;
+    Color diffEasy = { 0, 155, 72, 255 };
+    Color diffMed = { 180, 140, 20, 255 };
+    Color diffHard = { 237, 28, 36, 255 };
+    std::vector<Button> diffBtns;
+    diffBtns.push_back(makeButton(startX, 310, bw, bh, msg(8), diffEasy));
+    diffBtns.push_back(makeButton(startX, 310 + (bh + gap), bw, bh, msg(9), diffMed));
+    diffBtns.push_back(makeButton(startX, 310 + (bh + gap) * 2, bw, bh, msg(10), diffHard));
+
+    for (int i = 0; i < 3; i++)
+    {
+        drawButton(const_cast<Button&>(diffBtns[i]));
+        if (i == m_diffChoice - 1)
+            DrawRectangleRoundedLines(diffBtns[i].rect, 0.3f, 10, 3, GOLD_COLOR);
+    }
+
+    Rectangle vietBtn = { (float)(SCREEN_W / 2 - 150), 430, 300, 40 };
+    Color vietOn = { 0, 200, 100, 255 };
+    Color vietOff = { 80, 80, 90, 255 };
+    DrawRectangleRounded(vietBtn, 0.3f, 10, m_vietRules ? vietOn : vietOff);
+    drawTextCentered(msg(19), 433, 18, WHITE);
+
+    Rectangle startBtn = { (float)(SCREEN_W / 2 - 100), 490, 200, 50 };
+    Color startBtnColor = { 0, 155, 72, 255 };
+    DrawRectangleRounded(startBtn, 0.3f, 10, startBtnColor);
+    drawTextCentered(msg(18), 495, 22, WHITE);
+}
+
+// ==================== LAN MENU ====================
+void MenuView::stepLan()
+{
+    int bw = 260, bh = 50, gap = 20;
+    int bx = (SCREEN_W - bw) / 2;
+    int by = 160;
+
+    Color hostBtnColor = { 0, 114, 188, 255 };
+    Color joinBtnColor = { 0, 155, 72, 255 };
+    Button hostBtn = makeButton(bx, by, bw, bh, msg(13), hostBtnColor);
+    Button joinBtn = makeButton(bx, by + bh + gap, bw, bh, msg(14), joinBtnColor);
+
+    if (drawButton(hostBtn))
+    {
+        m_stepResult.action = 4;
+        m_stepResult.confirmed = true;
+        m_phase = MenuPhase::Done;
+        return;
+    }
+
+    if (drawButton(joinBtn))
+    {
+        m_stepResult.action = 5;
+        m_stepResult.confirmed = true;
+        m_stepResult.port = std::atoi(m_portBuf);
+        m_stepResult.serverIp = m_ipBuf;
+        m_phase = MenuPhase::Done;
+        return;
+    }
+
+    // IP editing
+    Rectangle ipRect = { (float)(SCREEN_W / 2 - 150), (float)(by + 170), 300, 36 };
+    if (CheckCollisionPointRec(GetMousePosition(), ipRect) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+    { m_editingIp = true; m_editingPort = false; }
+    if (CheckCollisionPointRec(GetMousePosition(), ipRect) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        m_editingIp = true;
+
+    Rectangle portRect = { (float)(SCREEN_W / 2 - 150), (float)(by + 260), 300, 36 };
+    if (CheckCollisionPointRec(GetMousePosition(), portRect) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        m_editingPort = true;
+
+    if (m_editingIp)
+    {
+        int k = GetCharPressed();
+        while (k > 0)
+        {
+            if (k >= 32 && k <= 126 && m_ipLen < 62)
+            { m_ipBuf[m_ipLen] = (char)k; m_ipLen++; m_ipBuf[m_ipLen] = 0; }
+            k = GetCharPressed();
+        }
+        if (IsKeyPressed(KEY_BACKSPACE) && m_ipLen > 0)
+        { m_ipLen--; m_ipBuf[m_ipLen] = 0; }
+        if (IsKeyPressed(KEY_ENTER)) m_editingIp = false;
+    }
+
+    if (m_editingPort)
+    {
+        int k = GetCharPressed();
+        while (k > 0)
+        {
+            if (k >= '0' && k <= '9' && m_portLen < 6)
+            { m_portBuf[m_portLen] = (char)k; m_portLen++; m_portBuf[m_portLen] = 0; }
+            k = GetCharPressed();
+        }
+        if (IsKeyPressed(KEY_BACKSPACE) && m_portLen > 0)
+        { m_portLen--; m_portBuf[m_portLen] = 0; }
+        if (IsKeyPressed(KEY_ENTER)) m_editingPort = false;
+    }
+}
+
+void MenuView::drawLan()
+{
+    drawTitle(msg(5), 40, 48, GOLD_COLOR);
+
+    int by = 160;
+    int bw = 260, bh = 50, gap = 20;
+    int bx = (SCREEN_W - bw) / 2;
+    Color hostBtnColor = { 0, 114, 188, 255 };
+    Color joinBtnColor = { 0, 155, 72, 255 };
+    Button hostBtn = makeButton(bx, by, bw, bh, msg(13), hostBtnColor);
+    Button joinBtn = makeButton(bx, by + bh + gap, bw, bh, msg(14), joinBtnColor);
+    drawButton(const_cast<Button&>(hostBtn));
+    drawButton(const_cast<Button&>(joinBtn));
+
+    drawTextCentered(msg(15), by + 140, 20, WHITE_SMOKE);
+    Rectangle ipRect = { (float)(SCREEN_W / 2 - 150), (float)(by + 170), 300, 36 };
+    Color ipRectColor = { 60, 60, 70, 255 };
+    DrawRectangleRounded(ipRect, 0.3f, 10, ipRectColor);
+    if (m_editingIp) DrawRectangleRoundedLines(ipRect, 0.3f, 10, 2, GOLD_COLOR);
+    DrawText(m_ipBuf, (int)ipRect.x + 10, (int)ipRect.y + 6, 20, WHITE);
+
+    drawTextCentered(msg(16), by + 230, 20, WHITE_SMOKE);
+    Rectangle portRect = { (float)(SCREEN_W / 2 - 150), (float)(by + 260), 300, 36 };
+    Color portRectColor = { 60, 60, 70, 255 };
+    DrawRectangleRounded(portRect, 0.3f, 10, portRectColor);
+    if (m_editingPort) DrawRectangleRoundedLines(portRect, 0.3f, 10, 2, GOLD_COLOR);
+    DrawText(m_portBuf, (int)portRect.x + 10, (int)portRect.y + 6, 20, WHITE);
+}
+
+// ==================== COLOR PICKER ====================
+void MenuView::stepColorPicker()
+{
+    Color redCol = { 237, 28, 36, 255 };
+    Color blueCol = { 0, 114, 188, 255 };
+    Color greenCol = { 0, 155, 72, 255 };
+    Color yellowCol = { 255, 205, 0, 255 };
+    struct { int id; Color c; } colors[4] = {
+        { 1, redCol }, { 2, blueCol }, { 3, greenCol }, { 4, yellowCol }
+    };
+
+    int btnW = 120, btnH = 80, gap = 20;
+    int totalW = 4 * btnW + 3 * gap;
+    int startX = (SCREEN_W - totalW) / 2;
+    int startY = SCREEN_H / 2 - btnH / 2;
+
+    for (int i = 0; i < 4; i++)
+    {
+        Rectangle r = { (float)(startX + i * (btnW + gap)), (float)startY, (float)btnW, (float)btnH };
+        if (CheckCollisionPointRec(GetMousePosition(), r) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        {
+            m_stepResult.action = colors[i].id;
+            m_stepResult.confirmed = true;
+            m_phase = MenuPhase::Done;
+            return;
+        }
+    }
+
+    Rectangle backBtn = { (float)(SCREEN_W / 2 - 70), (float)(startY + btnH + 40), 140, 40 };
+    if (CheckCollisionPointRec(GetMousePosition(), backBtn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+    {
+        m_stepResult.action = -1;
+        m_stepResult.confirmed = false;
+        m_phase = MenuPhase::Done;
+    }
+}
+
+void MenuView::drawColorPicker()
+{
+    drawTitle(msg(20), SCREEN_H / 2 - 160, 36, WHITE_SMOKE);
+
+    Color redCol = { 237, 28, 36, 255 };
+    Color blueCol = { 0, 114, 188, 255 };
+    Color greenCol = { 0, 155, 72, 255 };
+    Color yellowCol = { 255, 205, 0, 255 };
+    struct { int id; Color c; const char * label; } colors[4] = {
+        { 1, redCol, "RED" }, { 2, blueCol, "BLUE" },
+        { 3, greenCol, "GREEN" }, { 4, yellowCol, "YELLOW" }
+    };
+
+    int btnW = 120, btnH = 80, gap = 20;
+    int totalW = 4 * btnW + 3 * gap;
+    int startX = (SCREEN_W - totalW) / 2;
+    int startY = SCREEN_H / 2 - btnH / 2;
+
+    for (int i = 0; i < 4; i++)
+    {
+        Rectangle r = { (float)(startX + i * (btnW + gap)), (float)startY, (float)btnW, (float)btnH };
+        Color c = colors[i].c;
+        if (CheckCollisionPointRec(GetMousePosition(), r)) c = Fade(c, 0.7f);
+        DrawRectangleRounded(r, 0.3f, 10, c);
+        int lw = MeasureText(colors[i].label, 16);
+        DrawText(colors[i].label, (int)(r.x + (r.width - lw) / 2), (int)(r.y + (r.height - 16) / 2), 16, WHITE);
+    }
+
+    Rectangle backBtn = { (float)(SCREEN_W / 2 - 70), (float)(startY + btnH + 40), 140, 40 };
+    DrawRectangleRounded(backBtn, 0.3f, 10, Color{ 80, 80, 80, 255 });
+    drawTextCentered(msg(17), startY + btnH + 44, 20, WHITE);
 }

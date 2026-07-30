@@ -223,6 +223,28 @@ const AssetManager::CachedText * AssetManager::getCachedText(
     return &m_textCache[key];
 }
 
+void AssetManager::drawCachedText(const std::string & text, int posX, int posY, int fontSize, Color color)
+{
+    if (text.empty()) return;
+    const CachedText * ct = getCachedText(text, fontSize, color);
+    if (ct)
+    {
+        DrawTexture(ct->tex, posX, posY, WHITE);
+    }
+}
+
+Vector2 AssetManager::measureCachedText(const std::string & text, int fontSize) const
+{
+    if (text.empty()) return { 0, 0 };
+    TextCacheKey searchKey{ text, fontSize, WHITE };
+    auto it = m_textCache.find(searchKey);
+    if (it != m_textCache.end())
+        return { (float)it->second.width, (float)it->second.height };
+
+    float w = (float)text.length() * (float)fontSize * 0.6f;
+    return { w, (float)fontSize };
+}
+
 void AssetManager::clearTextCache()
 {
     for (auto & kv : m_textCache)

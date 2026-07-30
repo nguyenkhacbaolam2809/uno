@@ -6,8 +6,11 @@
 #include "game_engine.h"
 #include "packets.h"
 #include "tcp_buffer.h"
+#include "network_socket.h"
 #include <string>
 #include <vector>
+#include <memory>
+#include <deque>
 #include <atomic>
 
 struct SyncPlayer
@@ -43,13 +46,15 @@ public:
     bool isConnected() const { return connected; }
 
 private:
-    int sock;
-    int epollFd;
+    std::unique_ptr<TcpSocket> m_sock;
+    std::unique_ptr<SocketPoller> m_poller;
     bool connected;
-    RecvBuffer recvBuf;
-    SendBuffer sendBuf;
+    RecvBuffer m_recvBuf;
+    std::deque<std::vector<char>> m_sendQueue;
+    int m_sendOffset{0};
 
     bool sendPacket(unsigned char type, unsigned char playerId, const void * body, int bodyLen);
+    void drainSendQueue();
 };
 
 #endif

@@ -32,7 +32,6 @@ private:
     };
 
     GameConfig config;
-    bool vietRules;
     GameEngine engine;
 
     int listenFd;

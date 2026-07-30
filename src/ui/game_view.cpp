@@ -95,27 +95,9 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
     {
         if (i == localPlayerId) continue;
         int x = startX + oppIdx * (slotW + gap);
-        int y = 20;
-
-        Rectangle slotRect = { (float)x, (float)y, (float)slotW, (float)slotH };
-        DrawRectangleRounded(slotRect, 0.3f, 10, Fade(BLACK, 0.3f));
-        DrawRectangleRoundedLines(slotRect, 0.3f, 10, 1, Fade(WHITE, 0.15f));
-
-        bool isCurrent = (state.gs.turn % n) == i;
-        Color nameCol = isCurrent ? GOLD_COLOR : WHITE_SMOKE;
-
-        DrawText(state.players[i].name.c_str(), x + 10, y + 8, 18, nameCol);
         int cc = (int)state.players[i].hand.size();
-        DrawText(TextFormat("Cards: %d", cc), x + 10, y + 36, 16, Fade(WHITE, 0.7f));
-
-        for (int j = 0; j < std::min(cc, 5); j++)
-            card_renderer::drawBack(x + 10 + j * 32, y + 56, 0.3f);
-
-        if (cc == 1)
-        {
-            Color unoTextColor = { 255, 200, 0, 255 };
-            DrawText("UNO!", x + slotW - 60, y + 8, 16, unoTextColor);
-        }
+        bool isCurrent = (state.gs.turn % n) == i;
+        drawOpponentSlot(x, 20, slotW, slotH, state.players[i].name, cc, isCurrent, cc == 1);
         oppIdx++;
     }
 
@@ -123,14 +105,7 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
     {
         int winner = state.gs.winner;
         if (winner >= 0 && winner < n)
-        {
-            std::string wtxt = state.players[winner].name + " wins!";
-            int tw = MeasureText(wtxt.c_str(), 36);
-            Color overlayBg = { 0, 0, 0, 180 };
-            DrawRectangle((SCREEN_W - tw) / 2 - 20, SCREEN_H / 2 - 40, tw + 40, 80, overlayBg);
-            int tw2 = MeasureText(wtxt.c_str(), 36);
-            DrawText(wtxt.c_str(), (SCREEN_W - tw2) / 2, SCREEN_H / 2 - 12, 36, GOLD_COLOR);
-        }
+            drawGameOverText(state.players[winner].name + " wins!");
         return;
     }
 
@@ -138,32 +113,10 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
     int pileW = (int)(CARD_WIDTH * 1.1f);
     int pileH = (int)(CARD_HEIGHT * 1.1f);
 
-    int drawX = cx - pileW - 60;
-    int drawY = cy - pileH / 2;
-    Rectangle drawPileRect = { (float)drawX, (float)drawY, (float)pileW, (float)pileH };
-    Color drawPileBg = { 0, 0, 0, 100 };
-    DrawRectangleRounded(drawPileRect, 0.3f, 10, drawPileBg);
-    card_renderer::drawBack(drawX + 4, drawY + 4, 1.0f);
-    DrawText("DRAW", drawX + 10, drawY + pileH + 8, 14, Fade(WHITE, 0.6f));
-
-    int discX = cx + 20;
-    int discY = cy - pileH / 2;
-    Rectangle discPileRect = { (float)discX, (float)discY, (float)pileW, (float)pileH };
-    Color discPileBg = { 0, 0, 0, 80 };
-    DrawRectangleRounded(discPileRect, 0.3f, 10, discPileBg);
-    card_renderer::drawCard(state.gs.currentCard, discX + 4, discY + 4, 1.0f);
-    DrawText("PLAY", discX + 10, discY + pileH + 8, 14, Fade(WHITE, 0.6f));
-
-    if (state.gs.forceDraw)
-    {
-        std::string forced = TextFormat("FORCED DRAW: %d", state.gs.drawStack);
-        int fw = MeasureText(forced.c_str(), 20);
-        Color forcedColor = { 255, 100, 100, 255 };
-        DrawText(forced.c_str(), cx - fw / 2, cy + pileH / 2 + 30, 20, forcedColor);
-    }
-
-    const char * dirText = state.gs.direction == 1 ? "\xe2\x86\x91" : "\xe2\x86\x93";
-    DrawText(dirText, cx - 10, cy - pileH / 2 - 40, 32, Fade(GOLD_COLOR, 0.8f));
+    drawPileStack(cx, cy, pileW, pileH);
+    drawDiscardPile(cx, cy, pileW, pileH, state.gs.currentCard);
+    drawDirectionIndicator(cx, cy, pileH, state.gs.direction);
+    drawForceDrawText(cx, cy, pileH, state.gs.forceDraw ? state.gs.drawStack : 0);
 
     const SyncPlayer & me = state.players[localPlayerId];
     int handSize = (int)me.hand.size();

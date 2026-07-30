@@ -1,14 +1,11 @@
 #include "network_client.h"
-#include <iostream>
+#include "network_socket.h"
+#include "logger.h"
 #include <cstring>
-#include <fcntl.h>
-#include <unistd.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/epoll.h>
-#include <netdb.h>
+#include <deque>
 
-NetworkClient::NetworkClient() : sock(-1), epollFd(-1), connected(false)
+NetworkClient::NetworkClient()
+    : m_sock(nullptr), connected(false)
 {
 }
 
@@ -19,90 +16,130 @@ NetworkClient::~NetworkClient()
 
 bool NetworkClient::connect(const std::string & host, int port)
 {
-    sock = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
-    if (sock < 0) return false;
+    disconnect();
 
-    sockaddr_in addr;
-    std::memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-
-    struct hostent * he = gethostbyname(host.c_str());
-    if (he)
-        std::memcpy(&addr.sin_addr, he->h_addr_list[0], he->h_length);
-    else
-        inet_pton(AF_INET, host.c_str(), &addr.sin_addr);
-
-    ::connect(sock, (struct sockaddr *)&addr, sizeof(addr));
-
-    epollFd = epoll_create1(0);
-    if (epollFd < 0) { close(sock); sock = -1; return false; }
-
-    struct epoll_event ev;
-    ev.events = EPOLLIN | EPOLLOUT | EPOLLET;
-    ev.data.fd = sock;
-    epoll_ctl(epollFd, EPOLL_CTL_ADD, sock, &ev);
-
-    struct epoll_event events[1];
-    int ret = epoll_wait(epollFd, events, 1, 3000);
-    if (ret <= 0)
+    m_sock = std::make_unique<TcpSocket>();
+    if (!m_sock->connect(host, port, 3000))
     {
-        close(sock); close(epollFd);
-        sock = -1; epollFd = -1;
+        m_sock.reset();
+        LOG_ERROR("Failed to connect to %s:%d", host.c_str(), port);
         return false;
     }
 
-    int err = 0;
-    socklen_t errLen = sizeof(err);
-    getsockopt(sock, SOL_SOCKET, SO_ERROR, &err, &errLen);
-    if (err != 0)
-    {
-        close(sock); close(epollFd);
-        sock = -1; epollFd = -1;
-        return false;
-    }
+    m_sock->setNonBlocking(true);
+    m_poller = std::make_unique<SocketPoller>();
+    m_poller->add(m_sock->fd(), true, false);
 
     connected = true;
+    LOG_INFO("Connected to %s:%d", host.c_str(), port);
     return true;
 }
 
 void NetworkClient::disconnect()
 {
     connected = false;
-    if (sock >= 0) { close(sock); sock = -1; }
-    if (epollFd >= 0) { close(epollFd); epollFd = -1; }
+    m_poller.reset();
+    if (m_sock)
+    {
+        m_sock->close();
+        m_sock.reset();
+    }
+    m_sendQueue.clear();
 }
 
 bool NetworkClient::sendPacket(unsigned char type, unsigned char playerId,
                                 const void * body, int bodyLen)
 {
-    if (!connected) return false;
-    sendBuf.beginPacket(type, playerId, bodyLen);
+    if (!connected || !m_sock) return false;
+
+    uint32_t totalLen = 4 + 4 + bodyLen;
+    std::vector<char> pkt(totalLen);
+
+    std::memcpy(pkt.data(), &totalLen, 4);
+    pkt[4] = static_cast<char>(type);
+    pkt[5] = static_cast<char>(playerId);
+    uint16_t bLen = static_cast<uint16_t>(bodyLen);
+    std::memcpy(pkt.data() + 6, &bLen, 2);
+
     if (body && bodyLen > 0)
-        sendBuf.writeBody(body, bodyLen);
-    sendBuf.flush(sock);
+        std::memcpy(pkt.data() + 10, body, bodyLen);
+
+    m_sendQueue.push_back(std::move(pkt));
+
+    drainSendQueue();
+
     return true;
+}
+
+void NetworkClient::drainSendQueue()
+{
+    while (!m_sendQueue.empty())
+    {
+        auto & pkt = m_sendQueue.front();
+        int n = m_sock->send(pkt.data() + m_sendOffset, (int)pkt.size() - m_sendOffset);
+        if (n > 0)
+        {
+            m_sendOffset += n;
+            if (m_sendOffset >= (int)pkt.size())
+            {
+                m_sendQueue.pop_front();
+                m_sendOffset = 0;
+            }
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    if (m_poller && m_sock)
+    {
+        bool wantWrite = !m_sendQueue.empty();
+        m_poller->modify(m_sock->fd(), true, wantWrite);
+    }
 }
 
 bool NetworkClient::receiveSyncState(SyncState & state, int timeoutMs)
 {
-    if (!connected) return false;
+    if (!connected || !m_sock || !m_poller) return false;
 
-    struct epoll_event events[1];
-    int ret = epoll_wait(epollFd, events, 1, timeoutMs);
-    if (ret <= 0) return false;
+    // Drain send queue first
+    drainSendQueue();
 
-    int n = recvBuf.fill(sock);
-    if (n <= 0)
+    int n = m_poller->wait(timeoutMs);
+    if (n <= 0) return false;
+
+    for (int i = 0; i < n; i++)
     {
-        if (n == 0) connected = false;
-        return false;
+        socket_t fd = m_poller->getFd(i);
+        if (fd != m_sock->fd()) continue;
+
+        PollEvent ev = m_poller->getEvent(i);
+        if (ev == PollEvent::Error || ev == PollEvent::Disconnected)
+        {
+            LOG_WARN("Server disconnected");
+            connected = false;
+            return false;
+        }
+        if (ev == PollEvent::Writable)
+        {
+            drainSendQueue();
+            continue;
+        }
+        if (ev != PollEvent::Readable) continue;
+
+        int recvd = m_recvBuf.fill(m_sock->fd());
+        if (recvd <= 0)
+        {
+            connected = false;
+            return false;
+        }
     }
 
-    if (!recvBuf.hasPacket())
+    if (!m_recvBuf.hasPacket())
         return false;
 
-    auto pkt = recvBuf.readPacket();
+    auto pkt = m_recvBuf.readPacket();
     if (pkt.type != PacketType::SyncState)
         return false;
 
@@ -164,29 +201,34 @@ bool NetworkClient::sendPlayCard(int cardIdx, unsigned char chosenColor, int pla
     PacketPlayCard pkt;
     pkt.cardIndex = (unsigned char)cardIdx;
     pkt.chosenColor = chosenColor;
-    return sendPacket(static_cast<unsigned char>(PacketType::PlayCard), (unsigned char)playerId, &pkt, sizeof(pkt));
+    return sendPacket(static_cast<unsigned char>(PacketType::PlayCard),
+                      (unsigned char)playerId, &pkt, sizeof(pkt));
 }
 
 bool NetworkClient::sendDraw(int playerId)
 {
-    return sendPacket(static_cast<unsigned char>(PacketType::Draw), (unsigned char)playerId, nullptr, 0);
+    return sendPacket(static_cast<unsigned char>(PacketType::Draw),
+                      (unsigned char)playerId, nullptr, 0);
 }
 
 bool NetworkClient::sendJumpIn(int cardIdx, int playerId)
 {
     PacketJumpIn pkt;
     pkt.cardIndex = (unsigned char)cardIdx;
-    return sendPacket(static_cast<unsigned char>(PacketType::JumpIn), (unsigned char)playerId, &pkt, sizeof(pkt));
+    return sendPacket(static_cast<unsigned char>(PacketType::JumpIn),
+                      (unsigned char)playerId, &pkt, sizeof(pkt));
 }
 
 bool NetworkClient::sendCallUno(int playerId)
 {
-    return sendPacket(static_cast<unsigned char>(PacketType::CallUno), (unsigned char)playerId, nullptr, 0);
+    return sendPacket(static_cast<unsigned char>(PacketType::CallUno),
+                      (unsigned char)playerId, nullptr, 0);
 }
 
 bool NetworkClient::sendCatchUno(int targetId, int playerId)
 {
     PacketUno pkt;
     pkt.targetId = (unsigned char)targetId;
-    return sendPacket(static_cast<unsigned char>(PacketType::CatchUno), (unsigned char)playerId, &pkt, sizeof(pkt));
+    return sendPacket(static_cast<unsigned char>(PacketType::CatchUno),
+                      (unsigned char)playerId, &pkt, sizeof(pkt));
 }

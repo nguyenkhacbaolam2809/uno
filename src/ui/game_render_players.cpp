@@ -10,6 +10,36 @@ using uno::SCREEN_H;
 using uno::WHITE_SMOKE;
 using uno::GOLD_COLOR;
 
+void drawOpponentSlot(int x, int y, int slotW, int slotH,
+                      const std::string & name, int cardCount,
+                      bool isCurrentTurn, bool hasOneCard)
+{
+    Rectangle slotRect = { (float)x, (float)y, (float)slotW, (float)slotH };
+    DrawRectangleRounded(slotRect, 0.3f, 10, Fade(BLACK, 0.3f));
+    DrawRectangleRoundedLines(slotRect, 0.3f, 10, 1, Fade(WHITE, 0.15f));
+
+    Color nameCol = isCurrentTurn ? GOLD_COLOR : WHITE_SMOKE;
+    DrawText(name.c_str(), x + 10, y + 8, 18, nameCol);
+    DrawText(TextFormat("Cards: %d", cardCount), x + 10, y + 36, 16, Fade(WHITE, 0.7f));
+
+    for (int j = 0; j < std::min(cardCount, 5); j++)
+        card_renderer::drawBack(x + 10 + j * 32, y + 56, 0.3f);
+
+    if (hasOneCard)
+    {
+        Color unoColor = { 255, 200, 0, 255 };
+        DrawText("UNO!", x + slotW - 60, y + 8, 16, unoColor);
+    }
+}
+
+void drawGameOverText(const std::string & winnerText)
+{
+    int tw = MeasureText(winnerText.c_str(), 36);
+    Color overlayBg = { 0, 0, 0, 180 };
+    DrawRectangle((SCREEN_W - tw) / 2 - 20, SCREEN_H / 2 - 40, tw + 40, 80, overlayBg);
+    DrawText(winnerText.c_str(), (SCREEN_W - tw) / 2, SCREEN_H / 2 - 12, 36, GOLD_COLOR);
+}
+
 void GameView::renderOpponents(const GameEngine & engine, int localPlayerId)
 {
     int n = engine.getPlayerCount();
@@ -25,33 +55,11 @@ void GameView::renderOpponents(const GameEngine & engine, int localPlayerId)
     for (int i = 0; i < n; i++)
     {
         if (i == localPlayerId) continue;
-
         int x = startX + oppIdx * (slotW + gap);
-
-        Rectangle slotRect = { (float)x, 20.0f, (float)slotW, (float)slotH };
-        DrawRectangleRounded(slotRect, 0.3f, 10, Fade(BLACK, 0.3f));
-        DrawRectangleRoundedLines(slotRect, 0.3f, 10, 1, Fade(WHITE, 0.15f));
-
         const Player * p = engine.getPlayer(i);
         int cardCount = p->get_size();
-        bool isCurrentTurn = (engine.getCurrentTurn() % n) == i;
-        Color nameCol = isCurrentTurn ? GOLD_COLOR : WHITE_SMOKE;
-
-        DrawText(p->getName().c_str(), x + 10, 28, 18, nameCol);
-        DrawText(TextFormat("Cards: %d", cardCount), x + 10, 56, 16, Fade(WHITE, 0.7f));
-
-        for (int j = 0; j < std::min(cardCount, 5); j++)
-        {
-            int bx = x + 10 + j * 32;
-            card_renderer::drawBack(bx, 76, 0.3f);
-        }
-
-        if (p->get_size() == 1)
-        {
-            Color unoColor = { 255, 200, 0, 255 };
-            DrawText("UNO!", x + slotW - 60, 28, 16, unoColor);
-        }
-
+        bool isCurrent = (engine.getCurrentTurn() % n) == i;
+        drawOpponentSlot(x, 20, slotW, slotH, p->getName(), cardCount, isCurrent, p->get_size() == 1);
         oppIdx++;
     }
 
@@ -61,13 +69,7 @@ void GameView::renderOpponents(const GameEngine & engine, int localPlayerId)
         if (winner >= 0)
         {
             const Player * wp = engine.getPlayer(winner);
-            std::string wtxt = wp->getName() + " wins!";
-            int tw = MeasureText(wtxt.c_str(), 36);
-            Color overlayBg = { 0, 0, 0, 180 };
-            DrawRectangle((SCREEN_W - tw) / 2 - 20, SCREEN_H / 2 - 40, tw + 40, 80,
-                          overlayBg);
-            int sw = MeasureText(wtxt.c_str(), 36);
-            DrawText(wtxt.c_str(), (SCREEN_W - sw) / 2, SCREEN_H / 2 - 12, 36, GOLD_COLOR);
+            drawGameOverText(wp->getName() + " wins!");
         }
     }
 }

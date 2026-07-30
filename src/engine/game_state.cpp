@@ -22,18 +22,18 @@ MenuState::MenuState(const GameConfig & cfg)
 
 AppStateId MenuState::update()
 {
-    if (m_done) return AppStateId::EXIT;
-    m_result = m_menuView->show();
+    bool finished = m_menuView->step();
+    if (!finished) return AppStateId::MENU;
+
+    m_result = m_menuView->getStepResult();
     if (!m_result.confirmed || m_result.action == -1)
-    {
-        m_done = true;
         return AppStateId::EXIT;
-    }
     return AppStateId::LOBBY;
 }
 
 void MenuState::render()
 {
+    m_menuView->drawCurrentMenu();
 }
 
 // --- PlayingState ---
