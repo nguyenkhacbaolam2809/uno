@@ -22,12 +22,13 @@ void InputManager::update()
         if (m_currMouse[i] && !m_prevMouse[i])
         {
             m_mousePressTime[i] = GetTime();
-            m_lastClickPos[i] = m_mousePos;
 
             float timeSince = GetTime() - m_lastClickTime[i];
             float dx = m_mousePos.x - m_lastClickPos[i].x;
-    float dy = m_mousePos.y - m_lastClickPos[i].y;
-    float dist = std::sqrt(dx * dx + dy * dy);
+            float dy = m_mousePos.y - m_lastClickPos[i].y;
+            float dist = std::sqrt(dx * dx + dy * dy);
+            m_lastClickPos[i] = m_mousePos;
+
             if (timeSince < 0.3f && dist < 10.0f)
                 m_clickCount[i]++;
             else

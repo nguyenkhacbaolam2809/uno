@@ -2,20 +2,19 @@
 #include "bot_factory.h"
 #include "rules.h"
 #include "rng.h"
-#include <cstring>
 
 GameEngine::GameEngine(const GameConfig & cfg, bool viet)
     : config(cfg), vietRules(viet)
 {
     state.turn = 0;
     state.direction = 1;
-    state.phase = PHASE_DEAL;
+    state.phase = GamePhase::Deal;
     state.forceDraw = false;
     state.drawStack = 0;
     state.vietRules = vietRules;
     state.winner = -1;
     state.playerCount = 0;
-    state.jumpState = JUMP_NONE;
+    state.jumpState = JumpInState::None;
     state.jumperId = -1;
 }
 
@@ -24,7 +23,7 @@ GameEngine::~GameEngine() = default;
 void GameEngine::init(int numPlayers)
 {
     botStrategies.clear();
-    players.assign(numPlayers, player());
+    players.assign(numPlayers, Player());
     botStrategies.resize(numPlayers);
 
     for (int i = 0; i < numPlayers; i++)
@@ -32,6 +31,7 @@ void GameEngine::init(int numPlayers)
 
     playerCount = numPlayers;
     state.playerCount = numPlayers;
+    m_unoCalled.assign(numPlayers, false);
 }
 
 int GameEngine::addPlayer(const std::string & name, PlayerType type, int difficulty)
@@ -40,8 +40,8 @@ int GameEngine::addPlayer(const std::string & name, PlayerType type, int difficu
     {
         if (players[i].getName().empty() && botStrategies[i] == nullptr)
         {
-            players[i] = player(name, type, static_cast<BotDifficulty>(difficulty));
-            if (type == BOT)
+            players[i] = Player(name, type, static_cast<BotDifficulty>(difficulty));
+            if (type == PlayerType::Bot)
                 botStrategies[i] = createBotStrategy(static_cast<BotDifficulty>(difficulty));
             return i;
         }
@@ -67,8 +67,8 @@ void GameEngine::chooseRandomStarter()
     int maxAttempts = playerCount * 10;
     while (maxAttempts > 0)
     {
-        card c = mainDeck.draw();
-        if (c.color != wild)
+        Card c = mainDeck.draw();
+        if (c.color != CardColor::Wild)
         {
             state.currentCard = c;
             state.turn = randomInt(0, playerCount - 1);
@@ -84,17 +84,17 @@ void GameEngine::chooseRandomStarter()
 
 void GameEngine::start()
 {
-    state.phase = PHASE_DEAL;
+    state.phase = GamePhase::Deal;
     initDecks();
     dealCards();
     chooseRandomStarter();
-    state.phase = PHASE_PLAY;
+    state.phase = GamePhase::Play;
 
     if (isActionCard(state.currentCard))
         applyActionCard(state.currentCard);
 
     state.winner = -1;
-    state.jumpState = JUMP_NONE;
+    state.jumpState = JumpInState::None;
     state.jumperId = -1;
 }
 
@@ -107,31 +107,31 @@ void GameEngine::reset()
         while (players[i].get_size() > 0)
             players[i].hand_remove(0);
     }
-    mainDeck = deck();
-    discardPile = deck();
+    mainDeck = Deck();
+    discardPile = Deck();
 
     state.turn = 0;
     state.direction = 1;
-    state.phase = PHASE_DEAL;
+    state.phase = GamePhase::Deal;
     state.forceDraw = false;
     state.drawStack = 0;
     state.winner = -1;
-    state.jumpState = JUMP_NONE;
+    state.jumpState = JumpInState::None;
     state.jumperId = -1;
 }
 
 GameState GameEngine::getState() const { return state; }
 const GameConfig & GameEngine::getConfig() const { return config; }
-bool GameEngine::isGameOver() const noexcept { return state.winner >= 0 || state.phase == PHASE_GAME_OVER; }
+bool GameEngine::isGameOver() const noexcept { return state.winner >= 0 || state.phase == GamePhase::GameOver; }
 int GameEngine::getCurrentTurn() const noexcept { return state.turn; }
 int GameEngine::getDirection() const noexcept { return state.direction; }
-const card & GameEngine::getCurrentCard() const noexcept { return state.currentCard; }
+const Card & GameEngine::getCurrentCard() const noexcept { return state.currentCard; }
 int GameEngine::getWinner() const noexcept { return state.winner; }
 int GameEngine::getDrawStack() const noexcept { return state.drawStack; }
 bool GameEngine::isForceDraw() const noexcept { return state.forceDraw; }
 GamePhase GameEngine::getPhase() const noexcept { return state.phase; }
-player * GameEngine::getPlayer(int idx) noexcept { return &players[idx]; }
-const player * GameEngine::getPlayer(int idx) const noexcept { return &players[idx]; }
+Player * GameEngine::getPlayer(int idx) noexcept { return &players[idx]; }
+const Player * GameEngine::getPlayer(int idx) const noexcept { return &players[idx]; }
 int GameEngine::getPlayerCount() const noexcept { return playerCount; }
 
 bool GameEngine::validatePlay(int playerIdx, int cardIdx) const
@@ -139,33 +139,30 @@ bool GameEngine::validatePlay(int playerIdx, int cardIdx) const
     if (playerIdx < 0 || playerIdx >= playerCount) return false;
     if (cardIdx < 0 || cardIdx >= players[playerIdx].get_size()) return false;
 
-    card chosen = players[playerIdx].peek(cardIdx);
-    return ::canPlayCard(chosen, state.currentCard);
+    Card chosen = players[playerIdx].peek(cardIdx);
+    if (!::canPlayCard(chosen, state.currentCard)) return false;
+    if (chosen.number == CARD_WILD_DRAW_FOUR && !::canPlayWildDrawFour(chosen, state.currentCard, players[playerIdx]))
+        return false;
+    return true;
 }
 
-bool GameEngine::playCard(int playerIdx, int cardIdx, const std::string & chosenColor)
+bool GameEngine::playCard(int playerIdx, int cardIdx, CardColor chosenColor)
 {
     if (playerIdx < 0 || playerIdx >= playerCount) return false;
     if (cardIdx < 0 || cardIdx >= players[playerIdx].get_size()) return false;
 
-    card chosen = players[playerIdx].peek(cardIdx);
+    Card chosen = players[playerIdx].peek(cardIdx);
     if (!::canPlayCard(chosen, state.currentCard)) return false;
+    if (chosen.number == CARD_WILD_DRAW_FOUR && !::canPlayWildDrawFour(chosen, state.currentCard, players[playerIdx]))
+        return false;
 
     if (vietRules && players[playerIdx].get_size() == 1 && !::isLegalLastCard(chosen))
         return false;
 
     players[playerIdx].hand_remove(cardIdx);
 
-    if (chosen.color == wild)
-    {
-        COLOR col = wild;
-        if (chosenColor == "do" || chosenColor == "red")           col = red;
-        else if (chosenColor == "xanh la" || chosenColor == "green")  col = green;
-        else if (chosenColor == "xanh duong" || chosenColor == "blue") col = blue;
-        else if (chosenColor == "vang" || chosenColor == "yellow")    col = yellow;
-        if (col != wild)
-            chosen.color = col;
-    }
+    if (chosen.color == CardColor::Wild)
+        chosen.color = chosenColor;
 
     state.currentCard = chosen;
     discardPile.add_card(chosen);
@@ -176,18 +173,17 @@ bool GameEngine::playCard(int playerIdx, int cardIdx, const std::string & chosen
         state.forceDraw = true;
     }
 
-    state.jumpState = JUMP_AVAILABLE;
+    state.jumpState = JumpInState::Available;
     state.jumperId = -1;
 
     if (players[playerIdx].get_size() == 0)
     {
         state.winner = playerIdx;
-        state.phase = PHASE_GAME_OVER;
+        state.phase = GamePhase::GameOver;
         return true;
     }
 
-    if (isActionCard(chosen) && !isStackCard(chosen))
-        applyActionCard(chosen);
+    applyActionCard(chosen);
 
     return true;
 }
@@ -214,7 +210,7 @@ void GameEngine::drawCard(int playerIdx)
     if (mainDeck.get_size() == 0)
         reshuffleDiscard();
 
-    card drawn = mainDeck.draw();
+    Card drawn = mainDeck.draw();
     players[playerIdx].hand_add(drawn);
 }
 
@@ -224,7 +220,7 @@ void GameEngine::reshuffleDiscard()
     if (n <= 1)
         return;
 
-    std::vector<card> tmp;
+    std::vector<Card> tmp;
     tmp.reserve(n);
     for (int i = 0; i < n; i++)
         tmp.push_back(discardPile.draw());
@@ -242,15 +238,15 @@ bool GameEngine::jumpIn(int playerIdx, int cardIdx)
     if (!vietRules) return false;
     if (playerIdx < 0 || playerIdx >= playerCount) return false;
     if (cardIdx < 0 || cardIdx >= players[playerIdx].get_size()) return false;
-    if (state.jumpState != JUMP_AVAILABLE) return false;
+    if (state.jumpState != JumpInState::Available) return false;
 
-    card chosen = players[playerIdx].peek(cardIdx);
+    Card chosen = players[playerIdx].peek(cardIdx);
     if (!::canJumpIn(chosen, state.currentCard)) return false;
 
     players[playerIdx].hand_remove(cardIdx);
     state.currentCard = chosen;
     discardPile.add_card(chosen);
-    state.jumpState = JUMP_TAKEN;
+    state.jumpState = JumpInState::Taken;
     state.jumperId = playerIdx;
 
     if (isStackCard(chosen))
@@ -262,7 +258,7 @@ bool GameEngine::jumpIn(int playerIdx, int cardIdx)
     if (players[playerIdx].get_size() == 0)
     {
         state.winner = playerIdx;
-        state.phase = PHASE_GAME_OVER;
+        state.phase = GamePhase::GameOver;
         return true;
     }
 
@@ -272,23 +268,28 @@ bool GameEngine::jumpIn(int playerIdx, int cardIdx)
 void GameEngine::callUno(int playerIdx)
 {
     if (playerIdx < 0 || playerIdx >= playerCount) return;
+    m_unoCalled[playerIdx] = true;
 }
 
-void GameEngine::catchUno(int /*callerIdx*/, int targetIdx)
+void GameEngine::catchUno(int callerIdx, int targetIdx)
 {
     if (!vietRules) return;
     if (targetIdx < 0 || targetIdx >= playerCount) return;
     if (players[targetIdx].get_size() != 1) return;
 
+    int penaltyTarget = targetIdx;
+    if (m_unoCalled[targetIdx])
+        penaltyTarget = callerIdx;
+
     for (int i = 0; i < 2; i++)
     {
         if (mainDeck.get_size() == 0)
             reshuffleDiscard();
-        players[targetIdx].hand_add(mainDeck.draw());
+        players[penaltyTarget].hand_add(mainDeck.draw());
     }
 }
 
-void GameEngine::applyActionCard(const card & c)
+void GameEngine::applyActionCard(const Card & c)
 {
     if (c.number == CARD_SKIP)
     {
@@ -301,19 +302,27 @@ void GameEngine::applyActionCard(const card & c)
         else
             state.direction = -state.direction;
     }
+    else if (isStackCard(c))
+    {
+        state.turn += state.direction;
+    }
 }
 
 void GameEngine::nextTurn()
 {
-    if (state.jumpState == JUMP_TAKEN && state.jumperId >= 0)
+    if (state.jumpState == JumpInState::Taken && state.jumperId >= 0)
     {
         state.turn = state.jumperId;
         state.jumperId = -1;
-        state.jumpState = JUMP_NONE;
+        state.jumpState = JumpInState::None;
         return;
     }
 
-    state.jumpState = JUMP_NONE;
+    // Clear UNO flag for outgoing player
+    if (state.turn >= 0 && state.turn < playerCount)
+        m_unoCalled[state.turn] = false;
+
+    state.jumpState = JumpInState::None;
     state.turn = (state.turn + state.direction) % playerCount;
     if (state.turn < 0)
         state.turn += playerCount;
@@ -322,9 +331,9 @@ void GameEngine::nextTurn()
 BotActionResult GameEngine::executeBotTurn(int playerIdx)
 {
     BotActionResult result;
-    result.action = BOT_DRAW;
+    result.action = BotAction::Draw;
     result.cardIdx = -1;
-    result.chosenColor = wild;
+    result.chosenColor = CardColor::Wild;
 
     if (playerIdx < 0 || playerIdx >= playerCount)
         return result;
@@ -333,7 +342,7 @@ BotActionResult GameEngine::executeBotTurn(int playerIdx)
     if (!strategy)
         return result;
 
-    player * self = &players[playerIdx];
+    Player * self = &players[playerIdx];
 
     int oppSizes[5] = {0};
     int oppCount = 0;
@@ -351,7 +360,7 @@ BotActionResult GameEngine::executeBotTurn(int playerIdx)
         int stackDefIdx = -1;
         for (int i = 0; i < self->get_size(); i++)
         {
-            card c = self->peek(i);
+            Card c = self->peek(i);
             if (::isStackCard(c) && ::canPlayCard(c, state.currentCard))
             {
                 stackDefIdx = i;
@@ -361,12 +370,12 @@ BotActionResult GameEngine::executeBotTurn(int playerIdx)
 
         if (stackDefIdx >= 0)
         {
-            COLOR col = wild;
-            card chosen = self->peek(stackDefIdx);
-            if (chosen.color == wild)
+            CardColor col = CardColor::Wild;
+            Card chosen = self->peek(stackDefIdx);
+            if (chosen.color == CardColor::Wild)
                 col = strategy->pickColor(self);
 
-            result.action = BOT_STACK_CARD;
+            result.action = BotAction::StackCard;
             result.cardIdx = stackDefIdx;
             result.chosenColor = col;
             return result;
@@ -383,12 +392,12 @@ BotActionResult GameEngine::executeBotTurn(int playerIdx)
     if (cardIdx < 0)
         return result;
 
-    COLOR col = wild;
-    card chosen = self->peek(cardIdx);
-    if (chosen.color == wild)
+    CardColor col = CardColor::Wild;
+    Card chosen = self->peek(cardIdx);
+    if (chosen.color == CardColor::Wild)
         col = strategy->pickColor(self);
 
-    result.action = BOT_PLAY_CARD;
+    result.action = BotAction::PlayCard;
     result.cardIdx = cardIdx;
     result.chosenColor = col;
     return result;
@@ -397,30 +406,30 @@ BotActionResult GameEngine::executeBotTurn(int playerIdx)
 BotActionResult GameEngine::executeBotJumpIn(int playerIdx)
 {
     BotActionResult result;
-    result.action = BOT_DRAW;
+    result.action = BotAction::Draw;
     result.cardIdx = -1;
-    result.chosenColor = wild;
+    result.chosenColor = CardColor::Wild;
 
     if (playerIdx < 0 || playerIdx >= playerCount) return result;
-    if (state.jumpState != JUMP_AVAILABLE) return result;
+    if (state.jumpState != JumpInState::Available) return result;
 
     IBotStrategy * strategy = botStrategies[playerIdx].get();
     if (!strategy) return result;
 
-    player * self = &players[playerIdx];
+    Player * self = &players[playerIdx];
     if (!strategy->shouldJumpIn(self, state.currentCard))
         return result;
 
     for (int i = 0; i < self->get_size(); i++)
     {
-        card c = self->peek(i);
+        Card c = self->peek(i);
         if (::canJumpIn(c, state.currentCard))
         {
-            COLOR col = wild;
-            if (c.color == wild)
+            CardColor col = CardColor::Wild;
+            if (c.color == CardColor::Wild)
                 col = strategy->pickColor(self);
 
-            result.action = BOT_JUMP_IN;
+            result.action = BotAction::JumpIn;
             result.cardIdx = i;
             result.chosenColor = col;
             return result;

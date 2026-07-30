@@ -2,6 +2,7 @@
 #define UNO_COLORS_H
 
 #include "raylib.h"
+#include "card.h"
 
 namespace uno {
 
@@ -11,15 +12,15 @@ inline const Color COLOR_BLUE   = {   0, 114, 188, 255 };
 inline const Color COLOR_YELLOW = { 255, 205,   0, 255 };
 inline const Color COLOR_DARK   = {  30,  30,  30, 255 };
 
-inline Color toRaylibColor(int c)
+inline Color toRaylibColor(CardColor c)
 {
     switch (c)
     {
-        case 1: return COLOR_RED;
-        case 2: return COLOR_GREEN;
-        case 3: return COLOR_BLUE;
-        case 4: return COLOR_YELLOW;
-        default: return COLOR_DARK;
+        case CardColor::Red:    return COLOR_RED;
+        case CardColor::Green:  return COLOR_GREEN;
+        case CardColor::Blue:   return COLOR_BLUE;
+        case CardColor::Yellow: return COLOR_YELLOW;
+        default:                return COLOR_DARK;
     }
 }
 

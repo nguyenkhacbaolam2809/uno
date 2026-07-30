@@ -2,6 +2,7 @@
 #define GUI_H
 
 #include "config.h"
+#include "raylib.h"
 
 class Gui {
 public:

@@ -100,8 +100,27 @@ void DebugOverlay::addHistoryPoint(float value)
 
 void DebugOverlay::renderGraph(const char * label, float minVal, float maxVal, Color col)
 {
-    (void)label;
-    (void)minVal;
-    (void)maxVal;
-    (void)col;
+    if (!m_visible || m_fpsHistory.empty()) return;
+
+    int gx = 10, gy = GetScreenHeight() - 120, gw = 300, gh = 80;
+    Color bg = { 0, 0, 0, 160 };
+    DrawRectangle(gx, gy, gw, gh, bg);
+    DrawRectangleLines(gx, gy, gw, gh, Fade(col, 0.5f));
+
+    DrawText(label, gx + 5, gy + 2, 12, col);
+
+    int n = (int)m_fpsHistory.size();
+    float stepX = (float)gw / std::max(n, 2);
+    float range = std::max(maxVal - minVal, 0.001f);
+    float prevY = 0;
+
+    for (int i = 0; i < n; i++)
+    {
+        float val = (m_fpsHistory[i] - minVal) / range;
+        float py = (float)(gy + gh - 12) - val * (gh - 16);
+        if (i > 0)
+            DrawLine((int)(gx + (i - 1) * stepX), (int)prevY,
+                     (int)(gx + i * stepX), (int)py, col);
+        prevY = py;
+    }
 }

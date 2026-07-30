@@ -1,7 +1,7 @@
 #ifndef CARD_H
 #define CARD_H
 
-enum COLOR : unsigned char { wild, red, green, blue, yellow };
+enum class CardColor : unsigned char { Wild, Red, Green, Blue, Yellow };
 
 constexpr int CARD_DRAW_TWO = 10;
 constexpr int CARD_SKIP    = 11;
@@ -12,16 +12,16 @@ constexpr int DECK_SIZE    = 108;
 constexpr int HAND_SIZE    = 7;
 constexpr int MAX_PLAYERS  = 5;
 
-class card
+class Card
 {
 public:
     int number;
-    COLOR color;
+    CardColor color;
 
-    card() noexcept;
-    card(int num, COLOR col) noexcept;
-    bool operator==(card const & other) const noexcept;
-    bool operator!=(card const & other) const noexcept;
+    Card() noexcept;
+    Card(int num, CardColor col) noexcept;
+    bool operator==(Card const & other) const noexcept;
+    bool operator!=(Card const & other) const noexcept;
 };
 
 #endif

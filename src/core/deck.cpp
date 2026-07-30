@@ -1,17 +1,17 @@
 #include "deck.h"
 #include "rng.h"
 
-deck::deck() noexcept
+Deck::Deck() noexcept
 {
 }
 
-void deck::create()
+void Deck::create()
 {
     cards.clear();
 
     for (int col = 1; col <= 4; col++)
     {
-        cards.push_back(card(0, static_cast<COLOR>(col)));
+        cards.push_back(Card(0, static_cast<CardColor>(col)));
     }
 
     for (int num = 1; num <= CARD_REVERSE; num++)
@@ -20,7 +20,7 @@ void deck::create()
         {
             for (int col = 1; col <= 4; col++)
             {
-                cards.push_back(card(num, static_cast<COLOR>(col)));
+                cards.push_back(Card(num, static_cast<CardColor>(col)));
             }
         }
     }
@@ -29,36 +29,34 @@ void deck::create()
     {
         for (int x = 0; x < 4; x++)
         {
-            cards.push_back(card(num, wild));
+            cards.push_back(Card(num, CardColor::Wild));
         }
     }
 }
 
-card deck::draw() noexcept
+Card Deck::draw() noexcept
 {
     if (cards.empty())
-        return card();
-    card c = cards.back();
+        return Card();
+    Card c = cards.back();
     cards.pop_back();
     return c;
 }
 
-int deck::add_card(const card & c) noexcept
+int Deck::add_card(const Card & c) noexcept
 {
     cards.push_back(c);
     return 0;
 }
 
-void deck::quick_shuffle() noexcept
+void Deck::quick_shuffle() noexcept
 {
     int n = static_cast<int>(cards.size());
     for (int i = n - 1; i > 0; i--)
     {
         int j = randomInt(0, i);
-        card temp = cards[i];
+        Card temp = cards[i];
         cards[i] = cards[j];
         cards[j] = temp;
     }
 }
-
-

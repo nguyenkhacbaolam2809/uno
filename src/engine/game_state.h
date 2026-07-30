@@ -7,6 +7,8 @@
 #include "game_view.h"
 #include "menu_view.h"
 #include <memory>
+#include <vector>
+#include <string>
 
 enum class AppStateId {
     MENU,
@@ -51,6 +53,12 @@ struct LobbyConfig {
     int port{8888};
 };
 
+struct GameOverInfo {
+    int winner;
+    int localPlayerId;
+    std::vector<std::string> playerNames;
+};
+
 class PlayingState : public IAppState {
 public:
     PlayingState(const GameConfig & cfg, const LobbyConfig & lobby);
@@ -59,6 +67,7 @@ public:
     void render() override;
     AppStateId id() const override { return AppStateId::PLAYING_LOCAL; }
     void enter() override;
+    GameOverInfo getGameOverInfo() const;
 
 private:
     GameConfig m_config;
@@ -69,6 +78,30 @@ private:
     bool m_entered{false};
 
     void processTurnLocal();
+};
+
+class GameOverState : public IAppState {
+public:
+    explicit GameOverState(const GameOverInfo & info);
+    AppStateId update() override;
+    void render() override;
+    AppStateId id() const override { return AppStateId::GAME_OVER; }
+    void enter() override;
+private:
+    GameOverInfo m_info;
+    bool m_entered{false};
+};
+
+class LobbyState : public IAppState {
+public:
+    LobbyState(const GameConfig & cfg, const LobbyConfig & lobby);
+    AppStateId update() override;
+    void render() override;
+    AppStateId id() const override { return AppStateId::LOBBY; }
+private:
+    GameConfig m_config;
+    LobbyConfig m_lobby;
+    float m_timer{0};
 };
 
 class AppStateMachine {
@@ -85,8 +118,11 @@ private:
     AppStateId m_currentId{AppStateId::MENU};
     std::unique_ptr<IAppState> m_currentState;
     LobbyConfig m_lobbyConfig;
+    GameOverInfo m_gameOverInfo;
 
     void createState(AppStateId id);
+    void extractLobbyFromMenu();
+    void extractGameOverFromPlaying();
 };
 
 #endif

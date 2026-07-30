@@ -11,12 +11,9 @@ using uno::CARD_WIDTH;
 using uno::CARD_HEIGHT;
 using uno::GOLD_COLOR;
 
-// Visual effects that enhance the game experience.
-// These are lightweight on purpose — no per-frame allocations.
-
 void GameView::renderWinConfetti(const GameEngine & engine)
 {
-    if (engine.getPhase() != PHASE_GAME_OVER) return;
+    if (engine.getPhase() != GamePhase::GameOver) return;
 
     ParticleBurstConfig cfg;
     cfg.origin = { (float)SCREEN_W / 2, (float)SCREEN_H / 2 };
@@ -40,7 +37,7 @@ void GameView::renderWinConfetti(const GameEngine & engine)
     }
 }
 
-void GameView::renderCardGlow(const card & c, int x, int y, float scale)
+void GameView::renderCardGlow(const Card & c, int x, int y, float scale)
 {
     (void)c;
     int w = static_cast<int>(CARD_WIDTH * scale);

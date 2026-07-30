@@ -1,39 +1,39 @@
 #include "bot_medium.h"
 
-int MediumBotStrategy::pickCard(player * self, const card & current,
+int MediumBotStrategy::pickCard(Player * self, const Card & current,
                                 int, int, const int *, int, int)
 {
     for (int i = 0; i < self->get_size(); i++)
     {
-        card c = self->peek(i);
-        if (c.number == current.number && c.color != wild)
+        Card c = self->peek(i);
+        if (c.number == current.number && c.color != CardColor::Wild)
             return i;
     }
 
     for (int i = 0; i < self->get_size(); i++)
     {
-        card c = self->peek(i);
-        if (c.color == current.color && c.color != wild && !::isActionCard(c))
+        Card c = self->peek(i);
+        if (c.color == current.color && c.color != CardColor::Wild && !::isActionCard(c))
             return i;
     }
 
     for (int i = 0; i < self->get_size(); i++)
     {
-        card c = self->peek(i);
-        if (::canPlayCard(c, current) && c.color != wild)
+        Card c = self->peek(i);
+        if (::canPlayCard(c, current) && c.color != CardColor::Wild)
             return i;
     }
 
     for (int i = 0; i < self->get_size(); i++)
     {
-        card c = self->peek(i);
+        Card c = self->peek(i);
         if (c.number == CARD_WILD || c.number == CARD_WILD_DRAW_FOUR)
             return i;
     }
 
     for (int i = 0; i < self->get_size(); i++)
     {
-        card c = self->peek(i);
+        Card c = self->peek(i);
         if (::canPlayCard(c, current))
             return i;
     }
@@ -41,14 +41,14 @@ int MediumBotStrategy::pickCard(player * self, const card & current,
     return -1;
 }
 
-COLOR MediumBotStrategy::pickColor(player * self) noexcept
+CardColor MediumBotStrategy::pickColor(Player * self) noexcept
 {
     int counts[4] = {0};
     for (int i = 0; i < self->get_size(); i++)
     {
-        card c = self->peek(i);
-        if (c.color >= 1 && c.color <= 4)
-            counts[c.color - 1]++;
+        Card c = self->peek(i);
+        if (c.color >= CardColor::Red && c.color <= CardColor::Yellow)
+            counts[static_cast<int>(c.color) - 1]++;
     }
 
     int bestCol = 1;
@@ -61,14 +61,14 @@ COLOR MediumBotStrategy::pickColor(player * self) noexcept
             bestCol = i + 1;
         }
     }
-    return static_cast<COLOR>(bestCol);
+    return static_cast<CardColor>(bestCol);
 }
 
-bool MediumBotStrategy::shouldJumpIn(player * self, const card & target) noexcept
+bool MediumBotStrategy::shouldJumpIn(Player * self, const Card & target) noexcept
 {
     for (int i = 0; i < self->get_size(); i++)
     {
-        card c = self->peek(i);
+        Card c = self->peek(i);
         if (::canJumpIn(c, target))
             return true;
     }

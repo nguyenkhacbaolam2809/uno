@@ -11,7 +11,7 @@ using uno::GOLD_COLOR;
 
 void GameView::renderHand(const GameEngine & engine, int localPlayerId)
 {
-    const player * p = engine.getPlayer(localPlayerId);
+    const Player * p = engine.getPlayer(localPlayerId);
     int handSize = p->get_size();
     if (handSize == 0) return;
 
@@ -40,7 +40,7 @@ void GameView::renderHand(const GameEngine & engine, int localPlayerId)
             DrawRectangleRounded(glowRect, 0.3f, 10, Fade(GOLD_COLOR, 0.4f));
         }
 
-        card c = p->peek(i);
+        Card c = p->peek(i);
         card_renderer::drawCard(c, (int)pos.x, (int)(pos.y - lift), 1.0f);
     }
 }
@@ -62,7 +62,7 @@ Rectangle GameView::getCardRect(int index, int total) const
 
 int GameView::cardAtPos(Vector2 mouse, const GameEngine & engine, int localPlayerId) const
 {
-    const player * p = engine.getPlayer(localPlayerId);
+    const Player * p = engine.getPlayer(localPlayerId);
     int handSize = p->get_size();
     for (int i = 0; i < handSize; i++)
     {

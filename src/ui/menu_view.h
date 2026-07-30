@@ -9,8 +9,8 @@
 #include <vector>
 
 struct MenuResult {
-    int action{0}; // 1=Single, 2=Local, 3=Mixed, 4=LAN host, 5=LAN join, -1=exit
-    int botDifficulty{D_EASY};
+    int action{0};
+    int botDifficulty{static_cast<int>(BotDifficulty::Easy)};
     int numHumans{2};
     int numBots{0};
     bool vietRules{false};

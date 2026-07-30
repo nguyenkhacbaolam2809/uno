@@ -26,7 +26,7 @@ struct InteractionResult {
     PlayerAction action;
     int cardIndex;
     int targetId;
-    COLOR chosenColor;
+    CardColor chosenColor;
 };
 
 class GameView {
@@ -40,7 +40,6 @@ public:
     InteractionResult getInteraction();
 
     void showMessage(const std::string & msg, float duration = 2.0f);
-    void showGameOver(const GameEngine & engine);
     bool isReady() const noexcept;
 
     void resetInteraction();
@@ -50,7 +49,7 @@ private:
     int selectedCard;
     InteractionResult pendingResult;
     bool needsColorPick;
-    COLOR pickedColor;
+    CardColor pickedColor;
     std::string overlayMsg;
     float overlayTimer;
 
@@ -68,7 +67,7 @@ private:
     void renderUnoButton(const GameEngine & engine, int localPlayerId);
     void renderCatchTargets(const GameEngine & engine, int localPlayerId);
     void renderWinConfetti(const GameEngine & engine);
-    void renderCardGlow(const card & c, int x, int y, float scale);
+    void renderCardGlow(const Card & c, int x, int y, float scale);
 
     void handleHandClick(const GameEngine & engine, int localPlayerId);
     void handleUnoCatchClick(const GameEngine & engine, int localPlayerId);

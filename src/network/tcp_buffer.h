@@ -1,114 +1,153 @@
 #ifndef TCP_BUFFER_H
 #define TCP_BUFFER_H
 
+#include "packets.h"
 #include <vector>
 #include <cstdint>
 #include <cstring>
 #include <algorithm>
+#include <unistd.h>
 
-#ifdef _WIN32
-#include <winsock2.h>
-#else
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#endif
+struct Packet {
+    PacketType type;
+    unsigned char playerId;
+    int length;
+    std::vector<char> body;
+};
 
-constexpr int BUFFER_SIZE = 65536;
+class RecvBuffer
+{
+public:
+    static constexpr size_t INITIAL_SIZE = 16384;
 
-struct RecvBuffer {
-    std::vector<char> buf;
-    int pending;
-
-    RecvBuffer() : buf(BUFFER_SIZE), pending(0) {}
+    RecvBuffer() : data(INITIAL_SIZE), readPos(0), writePos(0) {}
 
     int fill(int fd)
     {
-        if (pending >= BUFFER_SIZE) return -1;
-        int n = recv(fd, buf.data() + pending, BUFFER_SIZE - pending, 0);
-        if (n > 0) pending += n;
+        if (writePos >= data.size())
+        {
+            if (readPos > 0)
+            {
+                std::memmove(data.data(), data.data() + readPos, writePos - readPos);
+                writePos -= readPos;
+                readPos = 0;
+            }
+            else
+                data.resize(data.size() * 2);
+        }
+
+        int n = ::read(fd, data.data() + writePos, data.size() - writePos);
+        if (n > 0)
+            writePos += n;
         return n;
     }
 
     bool hasPacket() const
     {
-        if (pending < 6) return false; // len(4) + type(1) + pid(1)
-        uint32_t pktLen;
-        std::memcpy(&pktLen, buf.data(), sizeof(pktLen));
-        pktLen = ntohl(pktLen);
-        return pending >= static_cast<int>(pktLen + 4);
+        return (writePos - readPos) >= 4;
     }
-
-    struct Packet {
-        uint32_t length;
-        unsigned char type;
-        unsigned char playerId;
-        std::vector<char> body;
-    };
 
     Packet readPacket()
     {
-        Packet p;
-        uint32_t netLen;
-        std::memcpy(&netLen, buf.data(), sizeof(netLen));
-        p.length = ntohl(netLen);
-        p.type = static_cast<unsigned char>(buf[4]);
-        p.playerId = static_cast<unsigned char>(buf[5]);
-        int bodyLen = p.length - 2;
-        if (bodyLen > 0)
+        Packet pkt;
+        pkt.type = PacketType::Heartbeat;
+        pkt.playerId = 0;
+        pkt.length = 0;
+
+        if ((writePos - readPos) < 4)
+            return pkt;
+
+        uint32_t totalLen;
+        std::memcpy(&totalLen, data.data() + readPos, 4);
+        if (totalLen < 4 || totalLen > 65536 || (writePos - readPos) < totalLen)
+            return pkt;
+
+        int bodyOffset = readPos + 4;
+        int bodyMaxLen = totalLen - 4;
+
+        if (bodyMaxLen >= 4)
         {
-            p.body.assign(buf.data() + 6, buf.data() + 6 + bodyLen);
+            const char * bodyStart = data.data() + bodyOffset;
+            pkt.type = static_cast<PacketType>(static_cast<unsigned char>(bodyStart[0]));
+            pkt.playerId = static_cast<unsigned char>(bodyStart[1]);
+            uint16_t bLen;
+            std::memcpy(&bLen, bodyStart + 2, 2);
+            pkt.length = 4 + bLen;
+
+            if (bodyMaxLen >= 4 + bLen)
+            {
+                pkt.body.assign(bodyStart + 4, bodyStart + 4 + bLen);
+                readPos += totalLen;
+            }
         }
-        int total = p.length + 4;
-        pending -= total;
-        if (pending > 0)
-            std::memmove(buf.data(), buf.data() + total, pending);
-        return p;
+
+        return pkt;
     }
 
-    void consume(int bytes)
-    {
-        pending -= bytes;
-        if (pending > 0)
-            std::memmove(buf.data(), buf.data() + bytes, pending);
-    }
+private:
+    std::vector<char> data;
+    size_t readPos;
+    size_t writePos;
 };
 
-struct SendBuffer {
-    std::vector<char> buf;
-    int sent;
+class SendBuffer
+{
+public:
+    static constexpr size_t INITIAL_SIZE = 16384;
 
-    SendBuffer() : sent(0) {}
-
-    void clear() { buf.clear(); sent = 0; }
+    SendBuffer() : data(INITIAL_SIZE), writePos(0), pktSizePos(0), inPacket(false) {}
 
     void beginPacket(unsigned char type, unsigned char playerId, int bodyLen)
     {
-        clear();
-        uint32_t totalLen = bodyLen + 2;
-        uint32_t netLen = htonl(totalLen);
-        buf.resize(totalLen + 4);
-        std::memcpy(buf.data(), &netLen, 4);
-        buf[4] = static_cast<char>(type);
-        buf[5] = static_cast<char>(playerId);
+        data.clear();
+        writePos = 0;
+        inPacket = true;
+
+        uint32_t totalLen = 4 + 4 + bodyLen;
+        data.resize(totalLen);
+
+        std::memcpy(data.data(), &totalLen, 4);
+        data[4] = static_cast<char>(type);
+        data[5] = static_cast<char>(playerId);
+        uint16_t bLen = static_cast<uint16_t>(bodyLen);
+        std::memcpy(data.data() + 6, &bLen, 2);
+        writePos = 4 + 4;
+        pktSizePos = 0;
     }
 
-    void writeBody(const void * data, int len)
+    void writeBody(const void * buf, int len)
     {
-        std::memcpy(buf.data() + 6, data, len);
+        if (inPacket && buf && len > 0)
+        {
+            std::memcpy(data.data() + writePos, buf, len);
+            writePos += len;
+        }
     }
 
     int flush(int fd)
     {
-        if (buf.empty()) return 0;
-        int remaining = static_cast<int>(buf.size()) - sent;
-        if (remaining <= 0) { clear(); return 0; }
-        int n = send(fd, buf.data() + sent, remaining, 0);
-        if (n > 0) sent += n;
-        if (sent >= static_cast<int>(buf.size())) clear();
+        if (writePos == 0) return 0;
+        int n = ::write(fd, data.data(), writePos);
+        if (n > 0)
+        {
+            if (n < static_cast<int>(writePos))
+            {
+                std::memmove(data.data(), data.data() + n, writePos - n);
+                writePos -= n;
+            }
+            else
+                writePos = 0;
+        }
         return n;
     }
 
-    bool idle() const { return buf.empty(); }
+    bool idle() const { return writePos == 0; }
+
+private:
+    std::vector<char> data;
+    size_t writePos;
+    size_t pktSizePos;
+    bool inPacket;
 };
 
 #endif

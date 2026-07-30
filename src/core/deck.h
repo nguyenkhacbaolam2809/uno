@@ -4,18 +4,18 @@
 #include "card.h"
 #include <vector>
 
-class deck final {
+class Deck final {
 public:
-    deck() noexcept;
+    Deck() noexcept;
 
     void create();
     void quick_shuffle() noexcept;
-    card draw() noexcept;
-    int add_card(const card & c) noexcept;
-    int get_size() const noexcept { return static_cast<int>(cards.size()); }
+    Card draw() noexcept;
+    int add_card(const Card & c) noexcept;
+    [[nodiscard]] int get_size() const noexcept { return static_cast<int>(cards.size()); }
 
 private:
-    std::vector<card> cards;
+    std::vector<Card> cards;
 };
 
 #endif

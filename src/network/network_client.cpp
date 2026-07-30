@@ -103,7 +103,7 @@ bool NetworkClient::receiveSyncState(SyncState & state, int timeoutMs)
         return false;
 
     auto pkt = recvBuf.readPacket();
-    if (pkt.type != PKT_SYNC_STATE)
+    if (pkt.type != PacketType::SyncState)
         return false;
 
     const char * body = pkt.body.data();
@@ -141,15 +141,15 @@ bool NetworkClient::receiveSyncState(SyncState & state, int timeoutMs)
         std::memcpy(&pDiff, body + offset, sizeof(int));
         offset += sizeof(int);
 
-        sp.type = (PlayerType)pType;
-        sp.difficulty = (BotDifficulty)pDiff;
+        sp.type = static_cast<PlayerType>(pType);
+        sp.difficulty = static_cast<BotDifficulty>(pDiff);
 
         for (int j = 0; j < cardCount; j++)
         {
-            if (offset + (int)sizeof(card) > bodyLen) return false;
-            card c;
-            std::memcpy(&c, body + offset, sizeof(card));
-            offset += (int)sizeof(card);
+            if (offset + (int)sizeof(Card) > bodyLen) return false;
+            Card c;
+            std::memcpy(&c, body + offset, sizeof(Card));
+            offset += (int)sizeof(Card);
             sp.hand.push_back(c);
         }
 
@@ -159,40 +159,34 @@ bool NetworkClient::receiveSyncState(SyncState & state, int timeoutMs)
     return true;
 }
 
-bool NetworkClient::sendPlayCard(int cardIdx, const std::string & chosenColor, int playerId)
+bool NetworkClient::sendPlayCard(int cardIdx, unsigned char chosenColor, int playerId)
 {
     PacketPlayCard pkt;
     pkt.cardIndex = (unsigned char)cardIdx;
-
-    if (chosenColor == "do" || chosenColor == "red") pkt.chosenColor = 1;
-    else if (chosenColor == "xanh la" || chosenColor == "green") pkt.chosenColor = 2;
-    else if (chosenColor == "xanh duong" || chosenColor == "blue") pkt.chosenColor = 3;
-    else if (chosenColor == "vang" || chosenColor == "yellow") pkt.chosenColor = 4;
-    else pkt.chosenColor = 0;
-
-    return sendPacket(PKT_PLAY_CARD, (unsigned char)playerId, &pkt, sizeof(pkt));
+    pkt.chosenColor = chosenColor;
+    return sendPacket(static_cast<unsigned char>(PacketType::PlayCard), (unsigned char)playerId, &pkt, sizeof(pkt));
 }
 
 bool NetworkClient::sendDraw(int playerId)
 {
-    return sendPacket(PKT_DRAW, (unsigned char)playerId, nullptr, 0);
+    return sendPacket(static_cast<unsigned char>(PacketType::Draw), (unsigned char)playerId, nullptr, 0);
 }
 
 bool NetworkClient::sendJumpIn(int cardIdx, int playerId)
 {
     PacketJumpIn pkt;
     pkt.cardIndex = (unsigned char)cardIdx;
-    return sendPacket(PKT_JUMP_IN, (unsigned char)playerId, &pkt, sizeof(pkt));
+    return sendPacket(static_cast<unsigned char>(PacketType::JumpIn), (unsigned char)playerId, &pkt, sizeof(pkt));
 }
 
 bool NetworkClient::sendCallUno(int playerId)
 {
-    return sendPacket(PKT_CALL_UNO, (unsigned char)playerId, nullptr, 0);
+    return sendPacket(static_cast<unsigned char>(PacketType::CallUno), (unsigned char)playerId, nullptr, 0);
 }
 
 bool NetworkClient::sendCatchUno(int targetId, int playerId)
 {
     PacketUno pkt;
     pkt.targetId = (unsigned char)targetId;
-    return sendPacket(PKT_CATCH_UNO, (unsigned char)playerId, &pkt, sizeof(pkt));
+    return sendPacket(static_cast<unsigned char>(PacketType::CatchUno), (unsigned char)playerId, &pkt, sizeof(pkt));
 }

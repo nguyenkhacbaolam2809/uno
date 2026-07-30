@@ -2,7 +2,7 @@
 #define ANIMATION_MANAGER_H
 
 #include "raylib.h"
-#include <vector>
+#include <unordered_map>
 #include <memory>
 #include <functional>
 
@@ -49,6 +49,7 @@ public:
     float value() const noexcept { return m_current; }
     void onFinish(std::function<void()> cb) { m_onFinish = std::move(cb); }
     void onUpdate(std::function<void(float)> cb) { m_onUpdate = std::move(cb); }
+    void reset() override { Animation::reset(); m_current = m_start; }
 
 private:
     float m_start, m_end, m_current;
@@ -64,6 +65,7 @@ public:
     Vector2 value() const noexcept { return m_current; }
     void onFinish(std::function<void()> cb) { m_onFinish = std::move(cb); }
     void onUpdate(std::function<void(Vector2)> cb) { m_onUpdate = std::move(cb); }
+    void reset() override { Animation::reset(); m_current = m_start; }
 
 private:
     Vector2 m_current, m_start, m_end;
@@ -78,6 +80,7 @@ public:
     bool isFinished() const noexcept override { return m_state == AnimState::FINISHED; }
     Color value() const noexcept { return m_current; }
     void onUpdate(std::function<void(Color)> cb) { m_onUpdate = std::move(cb); }
+    void reset() override { Animation::reset(); m_current = m_start; }
 
 private:
     Color m_current, m_start, m_end;
@@ -91,6 +94,7 @@ public:
     bool isFinished() const noexcept override { return m_state == AnimState::FINISHED; }
     Vector2 offset() const noexcept { return m_offset; }
     void onUpdate(std::function<void(Vector2)> cb) { m_onUpdate = std::move(cb); }
+    void reset() override { Animation::reset(); m_offset = { 0, 0 }; }
 
 private:
     float m_intensity;
@@ -104,6 +108,7 @@ public:
     void update(float dt) override;
     bool isFinished() const noexcept override { return m_state == AnimState::FINISHED; }
     void onFinish(std::function<void()> cb) { m_onFinish = std::move(cb); }
+    void reset() override { Animation::reset(); }
 
 private:
     std::function<void()> m_onFinish;
@@ -166,11 +171,7 @@ public:
 private:
     AnimationManager() = default;
 
-    struct Entry {
-        int id;
-        std::unique_ptr<Animation> anim;
-    };
-    std::vector<Entry> m_animations;
+    std::unordered_map<int, std::unique_ptr<Animation>> m_animations;
     int m_nextId{1};
 };
 

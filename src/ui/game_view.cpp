@@ -17,7 +17,7 @@ using uno::WILD_BG;
 
 GameView::GameView()
     : hoveredCard(-1), selectedCard(-1), needsColorPick(false),
-      pickedColor(wild),
+      pickedColor(CardColor::Wild),
       overlayTimer(0.0f), unoButtonEnabled(false), vulnerableOpponent(-1),
       handScrollOffset(0)
 {
@@ -28,7 +28,7 @@ void GameView::resetInteraction()
     pendingResult.action = PlayerAction::NONE;
     pendingResult.cardIndex = -1;
     pendingResult.targetId = -1;
-    pendingResult.chosenColor = wild;
+    pendingResult.chosenColor = CardColor::Wild;
     selectedCard = -1;
     hoveredCard = -1;
     needsColorPick = false;
@@ -119,7 +119,7 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
         oppIdx++;
     }
 
-    if (state.gs.phase == PHASE_GAME_OVER)
+    if (state.gs.phase == GamePhase::GameOver)
     {
         int winner = state.gs.winner;
         if (winner >= 0 && winner < n)
@@ -295,10 +295,10 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
                 Rectangle cardArea = { pos.x, pos.y, (float)CARD_WIDTH, (float)CARD_HEIGHT };
                 if (CheckCollisionPointRec(m, cardArea))
                 {
-                    card chosen = me.hand[i];
+                    Card chosen = me.hand[i];
                     if (canPlayCard(chosen, state.gs.currentCard))
                     {
-                        if (chosen.color == wild)
+                        if (chosen.color == CardColor::Wild)
                         {
                             needsColorPick = true;
                             selectedCard = i;

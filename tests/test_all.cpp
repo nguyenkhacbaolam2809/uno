@@ -6,7 +6,6 @@
 #include "config.h"
 #include <iostream>
 #include <cstdlib>
-#include <ctime>
 #include <cassert>
 #include <string>
 
@@ -24,31 +23,16 @@ int testsFailed = 0;
 
 void testCard()
 {
-    card a;
-    a.number = 5;
-    a.color = red;
+    Card a(5, CardColor::Red);
+    Card b(5, CardColor::Green);
+    Card c(7, CardColor::Red);
+    Card wc(CARD_WILD, CardColor::Wild);
+    Card d4(CARD_WILD_DRAW_FOUR, CardColor::Wild);
 
-    card b;
-    b.number = 5;
-    b.color = green;
-
-    card c;
-    c.number = 7;
-    c.color = red;
-
-    card wc;
-    wc.number = 13;
-    wc.color = ::wild;
-
-    card d4;
-    d4.number = 14;
-    d4.color = ::wild;
-
-    // Equality by number OR color
-    TEST("card same number different color", a == b);
-    TEST("card same color different number", a == c);
-    TEST("card different number and color", !(b == c));
-    TEST("wild match by color wild", wc == d4);
+    TEST("same number diff color not equal", !(a == b));
+    TEST("same color diff number not equal", !(a == c));
+    TEST("wild and d4 not equal", !(wc == d4));
+    TEST("identical cards equal", a == Card(5, CardColor::Red));
 
     // canPlayCard tests
     TEST("canPlayCard same number", canPlayCard(b, a));
@@ -58,245 +42,261 @@ void testCard()
     TEST("canPlayCard incompatible", !canPlayCard(b, c));
 
     // isActionCard
-    TEST("skip is action", isActionCard(card(11, red)));
-    TEST("reverse is action", isActionCard(card(12, green)));
-    TEST("draw2 is action", isActionCard(card(10, blue)));
-    TEST("wild is action", isActionCard(card(13, ::wild)));
-    TEST("wild draw4 is action", isActionCard(card(14, ::wild)));
-    TEST("number 5 is not action", !isActionCard(card(5, red)));
+    TEST("skip is action", isActionCard(Card(11, CardColor::Red)));
+    TEST("reverse is action", isActionCard(Card(12, CardColor::Green)));
+    TEST("draw2 is action", isActionCard(Card(10, CardColor::Blue)));
+    TEST("wild is action", isActionCard(Card(13, CardColor::Wild)));
+    TEST("wild draw4 is action", isActionCard(Card(14, CardColor::Wild)));
+    TEST("number 5 is not action", !isActionCard(Card(5, CardColor::Red)));
 
     // isStackCard
-    TEST("draw2 is stack", isStackCard(card(10, red)));
-    TEST("wild draw4 is stack", isStackCard(card(14, ::wild)));
-    TEST("skip is not stack", !isStackCard(card(11, red)));
-    TEST("number is not stack", !isStackCard(card(5, green)));
+    TEST("draw2 is stack", isStackCard(Card(10, CardColor::Red)));
+    TEST("wild draw4 is stack", isStackCard(Card(14, CardColor::Wild)));
+    TEST("skip is not stack", !isStackCard(Card(11, CardColor::Red)));
+    TEST("number is not stack", !isStackCard(Card(5, CardColor::Green)));
 
     // getStackValue
-    TEST("draw2 stack value 2", getStackValue(card(10, blue)) == 2);
-    TEST("wild draw4 stack value 4", getStackValue(card(14, ::wild)) == 4);
+    TEST("draw2 stack value 2", getStackValue(Card(10, CardColor::Blue)) == 2);
+    TEST("wild draw4 stack value 4", getStackValue(Card(14, CardColor::Wild)) == 4);
 
     // isLegalLastCard (Vietnamese rules)
-    TEST("number is legal last", isLegalLastCard(card(3, red)));
-    TEST("skip is legal last", isLegalLastCard(card(11, green)));
-    TEST("reverse is legal last", isLegalLastCard(card(12, blue)));
-    TEST("draw2 not legal last", !isLegalLastCard(card(10, yellow)));
-    TEST("wild not legal last", !isLegalLastCard(card(13, ::wild)));
-    TEST("wild draw4 not legal last", !isLegalLastCard(card(14, ::wild)));
+    TEST("number is legal last", isLegalLastCard(Card(3, CardColor::Red)));
+    TEST("skip is legal last", isLegalLastCard(Card(11, CardColor::Green)));
+    TEST("reverse is legal last", isLegalLastCard(Card(12, CardColor::Blue)));
+    TEST("draw2 not legal last", !isLegalLastCard(Card(10, CardColor::Yellow)));
+    TEST("wild not legal last", !isLegalLastCard(Card(13, CardColor::Wild)));
+    TEST("wild draw4 not legal last", !isLegalLastCard(Card(14, CardColor::Wild)));
 
     // canJumpIn (Vietnamese rules) - requires exact same card (number AND color)
-    TEST("jump in exact same card", canJumpIn(card(3, red), card(3, red)));
-    TEST("jump in different color", !canJumpIn(card(3, red), card(3, green)));
-    TEST("jump in different number", !canJumpIn(card(5, red), card(3, red)));
-    TEST("jump in completely different", !canJumpIn(card(5, red), card(3, green)));
+    TEST("jump in exact same card", canJumpIn(Card(3, CardColor::Red), Card(3, CardColor::Red)));
+    TEST("jump in different color", !canJumpIn(Card(3, CardColor::Red), Card(3, CardColor::Green)));
+    TEST("jump in different number", !canJumpIn(Card(5, CardColor::Red), Card(3, CardColor::Red)));
+    TEST("jump in completely different", !canJumpIn(Card(5, CardColor::Red), Card(3, CardColor::Green)));
 }
 
 void testDeck()
 {
-    deck mainDeck;
+    Deck mainDeck;
     TEST("deck initially empty", mainDeck.get_size() == 0);
 
     mainDeck.create();
     int initialSize = mainDeck.get_size();
 
-    // Standard UNO deck has 108 cards
     {
         int expected = 108;
         TEST("deck size 108 after create", initialSize == expected);
     }
 
-    // Draw all cards
     for (int i = 0; i < initialSize; i++)
         mainDeck.draw();
     TEST("deck empty after drawing all", mainDeck.get_size() == 0);
 
-    // Draw from empty deck returns invalid card
-    card emptyCard = mainDeck.draw();
-    TEST("draw from empty returns wild", emptyCard.color == wild);
+    Card emptyCard = mainDeck.draw();
+    TEST("draw from empty returns wild", emptyCard.color == CardColor::Wild);
 
-    // Add card back
-    card c(5, red);
+    Card c(5, CardColor::Red);
     mainDeck.add_card(c);
     TEST("deck has 1 card after add", mainDeck.get_size() == 1);
 
-    card drawn = mainDeck.draw();
-    TEST("drawn card matches added", drawn.number == 5 && drawn.color == red);
+    Card drawn = mainDeck.draw();
+    TEST("drawn card matches added", drawn.number == 5 && drawn.color == CardColor::Red);
 
-    // Copy constructor
     mainDeck.create();
-    deck copyDeck(mainDeck);
+    Deck copyDeck(mainDeck);
     TEST("copy deck same size", copyDeck.get_size() == mainDeck.get_size());
 
-    // Assignment operator
-    deck assignDeck;
+    Deck assignDeck;
     assignDeck = mainDeck;
     TEST("assign deck same size", assignDeck.get_size() == mainDeck.get_size());
 
-    // Shuffle doesn't change size
     mainDeck.quick_shuffle();
     TEST("shuffle preserves size", mainDeck.get_size() == 108);
 }
 
 void testPlayer()
 {
-    player p("TestPlayer", HUMAN, D_EASY);
+    Player p("TestPlayer", PlayerType::Human, BotDifficulty::Easy);
     TEST("player name", p.getName() == "TestPlayer");
-    TEST("player type HUMAN", p.getType() == HUMAN);
-    TEST("player difficulty D_EASY", p.getDifficulty() == D_EASY);
+    TEST("player type HUMAN", p.getType() == PlayerType::Human);
+    TEST("player difficulty", p.getDifficulty() == BotDifficulty::Easy);
     TEST("player isBot false", !p.isBot());
     TEST("player starts empty", p.get_size() == 0);
 
-    card c1(3, red);
-    card c2(7, blue);
-    card c3(10, green);
+    Card c1(3, CardColor::Red);
+    Card c2(7, CardColor::Blue);
+    Card c3(10, CardColor::Green);
 
     p.hand_add(c1);
     TEST("player has 1 card", p.get_size() == 1);
-    TEST("peek matches added", p.peek(0).number == 3 && p.peek(0).color == red);
+    TEST("peek matches added", p.peek(0).number == 3 && p.peek(0).color == CardColor::Red);
 
     p.hand_add(c2);
     p.hand_add(c3);
     TEST("player has 3 cards", p.get_size() == 3);
 
-    // Peek bounds checking
-    card invalid = p.peek(-1);
-    TEST("peek -1 returns safe card", invalid.color == wild);
+    Card invalid = p.peek(-1);
+    TEST("peek -1 returns safe card", invalid.color == CardColor::Wild);
     invalid = p.peek(100);
-    TEST("peek out of bounds safe", invalid.color == wild);
+    TEST("peek out of bounds safe", invalid.color == CardColor::Wild);
 
-    // Remove card
-    card removed = p.hand_remove(1);
-    TEST("removed correct card", removed.number == 7 && removed.color == blue);
+    Card removed = p.hand_remove(1);
+    TEST("removed correct card", removed.number == 7 && removed.color == CardColor::Blue);
     TEST("player has 2 cards after remove", p.get_size() == 2);
 
-    // Remove from invalid position
     removed = p.hand_remove(-1);
-    TEST("remove -1 returns safe card", removed.color == wild);
+    TEST("remove -1 returns safe card", removed.color == CardColor::Wild);
     removed = p.hand_remove(100);
-    TEST("remove out of bounds safe", removed.color == wild);
+    TEST("remove out of bounds safe", removed.color == CardColor::Wild);
 
-    // Copy constructor
-    player p2(p);
+    Player p2(p);
     TEST("copy constructor same size", p2.get_size() == p.get_size());
 
-    // Assignment
-    player p3;
+    Player p3;
     p3 = p;
     TEST("assignment same size", p3.get_size() == p.get_size());
 
-    // Bot player
-    player bot("Bot1", BOT, D_HARD);
+    Player bot("Bot1", PlayerType::Bot, BotDifficulty::Hard);
     TEST("bot isBot true", bot.isBot());
-    TEST("bot type BOT", bot.getType() == BOT);
-    TEST("bot difficulty HARD", bot.getDifficulty() == D_HARD);
+    TEST("bot type BOT", bot.getType() == PlayerType::Bot);
+    TEST("bot difficulty HARD", bot.getDifficulty() == BotDifficulty::Hard);
 }
 
 void testGameEngine()
 {
     GameConfig cfg;
-    cfg.os = OS_WINDOWS;
-    cfg.lang = LANG_ENGLISH;
+    cfg.lang = Language::English;
 
     GameEngine engine(cfg, false);
     engine.init(4);
 
-    engine.addPlayer("Alice", HUMAN, 0);
-    engine.addPlayer("Bob", HUMAN, 0);
-    engine.addPlayer("Charlie", HUMAN, 0);
-    engine.addPlayer("Diana", HUMAN, 0);
+    engine.addPlayer("Alice", PlayerType::Human, 0);
+    engine.addPlayer("Bob", PlayerType::Human, 0);
+    engine.addPlayer("Charlie", PlayerType::Human, 0);
+    engine.addPlayer("Diana", PlayerType::Human, 0);
 
     engine.start();
 
-    TEST("game started phase PLAY", engine.getPhase() == PHASE_PLAY);
+    TEST("game started phase PLAY", engine.getPhase() == GamePhase::Play);
     TEST("4 players in game", engine.getPlayerCount() == 4);
     TEST("no winner yet", engine.getWinner() < 0);
     TEST("not game over", !engine.isGameOver());
     TEST("current turn >= 0", engine.getCurrentTurn() >= 0 && engine.getCurrentTurn() < 4);
 
-    // Each player should have 7 cards
     for (int i = 0; i < 4; i++)
     {
-        const player * p = engine.getPlayer(i);
+        const Player * p = engine.getPlayer(i);
         TEST("player has 7 cards after deal", p->get_size() == 7);
     }
 
-    // Test getState
     GameState gs = engine.getState();
     TEST("state direction is 1 or -1", gs.direction == 1 || gs.direction == -1);
     TEST("state player count 4", gs.playerCount == 4);
 
-    // Test turn management
     int initialTurn = engine.getCurrentTurn();
     engine.nextTurn();
     int newTurn = engine.getCurrentTurn();
-    TEST("nextTurn changes player", newTurn != initialTurn || engine.getPhase() == PHASE_GAME_OVER);
+    TEST("nextTurn changes player", newTurn != initialTurn || engine.getPhase() == GamePhase::GameOver);
 
-    // Vietnamese rules
     GameEngine vnEngine(cfg, true);
     vnEngine.init(2);
-    vnEngine.addPlayer("X", HUMAN, 0);
-    vnEngine.addPlayer("Y", HUMAN, 0);
+    vnEngine.addPlayer("X", PlayerType::Human, 0);
+    vnEngine.addPlayer("Y", PlayerType::Human, 0);
     vnEngine.start();
-    TEST("viet rules engine starts", vnEngine.getPhase() == PHASE_PLAY);
+    TEST("viet rules engine starts", vnEngine.getPhase() == GamePhase::Play);
 }
 
 void testBot()
 {
     GameConfig cfg;
-    cfg.os = OS_WINDOWS;
-    cfg.lang = LANG_ENGLISH;
+    cfg.lang = Language::English;
 
-    // Test singleplayer mode (1 human + 1 bot)
     GameEngine engine(cfg, false);
     engine.init(2);
-    engine.addPlayer("Human", HUMAN, 0);
-    engine.addPlayer("Bot", BOT, D_EASY);
+    engine.addPlayer("Human", PlayerType::Human, 0);
+    engine.addPlayer("Bot", PlayerType::Bot, static_cast<int>(BotDifficulty::Easy));
     engine.start();
 
     int botIdx = 1;
-    const player * p = engine.getPlayer(botIdx);
+    const Player * p = engine.getPlayer(botIdx);
     TEST("bot has 7 cards", p->get_size() == 7);
     TEST("bot is bot", p->isBot());
 
-    // Bot can execute a turn
     BotActionResult result = engine.executeBotTurn(botIdx);
-    TEST("bot action is valid", result.action == BOT_PLAY_CARD || result.action == BOT_DRAW);
+    TEST("bot action is valid", result.action == BotAction::PlayCard || result.action == BotAction::Draw);
 }
 
 void testRulesIntegration()
 {
-    // Test valid play matching number
     {
-        card current(5, red);
-        card play(5, green);
+        Card current(5, CardColor::Red);
+        Card play(5, CardColor::Green);
         TEST("matching number", canPlayCard(play, current));
     }
 
-    // Test valid play matching color
     {
-        card current(5, red);
-        card play(7, red);
+        Card current(5, CardColor::Red);
+        Card play(7, CardColor::Red);
         TEST("matching color", canPlayCard(play, current));
     }
 
-    // Test wild play on anything
     {
-        card current(5, red);
-        card wildCard(13, ::wild);
+        Card current(5, CardColor::Red);
+        Card wildCard(13, CardColor::Wild);
         TEST("wild on any", canPlayCard(wildCard, current));
     }
 
-    // Test wild on wild (matching the wild color)
     {
-        card current(13, ::wild);
-        card play(14, ::wild);
+        Card current(13, CardColor::Wild);
+        Card play(14, CardColor::Wild);
         TEST("wild on wild", canPlayCard(play, current));
     }
 
-    // Test matching declared color after wild
     {
-        card current(13, red);
-        card play(5, red);
+        Card current(13, CardColor::Red);
+        Card play(5, CardColor::Red);
         TEST("match declared wild color", canPlayCard(play, current));
+    }
+}
+
+void testWildDrawFourRule()
+{
+    // Player has matching color -> cannot play Wild Draw 4
+    {
+        Player p("Test", PlayerType::Human, BotDifficulty::Easy);
+        p.hand_add(Card(5, CardColor::Red));   // matching color
+        p.hand_add(Card(14, CardColor::Wild));  // Wild Draw 4
+
+        Card current(3, CardColor::Red);
+        Card wd4(14, CardColor::Wild);
+
+        TEST("wd4 blocked when holding matching color",
+             !canPlayWildDrawFour(wd4, current, p));
+    }
+
+    // Player has NO matching color -> can play Wild Draw 4
+    {
+        Player p("Test", PlayerType::Human, BotDifficulty::Easy);
+        p.hand_add(Card(5, CardColor::Blue));    // non-matching color
+        p.hand_add(Card(14, CardColor::Wild));
+
+        Card current(3, CardColor::Red);
+        Card wd4(14, CardColor::Wild);
+
+        TEST("wd4 allowed when no matching color",
+             canPlayWildDrawFour(wd4, current, p));
+    }
+
+    // Player only has other wilds -> can play Wild Draw 4
+    {
+        Player p("Test", PlayerType::Human, BotDifficulty::Easy);
+        p.hand_add(Card(13, CardColor::Wild));    // another wild
+        p.hand_add(Card(14, CardColor::Wild));
+
+        Card current(3, CardColor::Red);
+        Card wd4(14, CardColor::Wild);
+
+        TEST("wd4 allowed when only wilds",
+             canPlayWildDrawFour(wd4, current, p));
     }
 }
 
@@ -307,6 +307,7 @@ int main()
     std::cout << "--- Card & Rules Tests ---" << std::endl;
     testCard();
     testRulesIntegration();
+    testWildDrawFourRule();
 
     std::cout << std::endl << "--- Deck Tests ---" << std::endl;
     testDeck();

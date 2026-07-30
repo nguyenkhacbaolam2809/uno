@@ -227,32 +227,33 @@ AnimationManager & AnimationManager::instance()
 
 void AnimationManager::update(float dt)
 {
-    for (auto & entry : m_animations)
+    for (auto & [id, anim] : m_animations)
     {
-        if (entry.anim->state() == AnimState::PENDING)
-            entry.anim->reset();
-        if (!entry.anim->isFinished())
-            entry.anim->update(dt);
+        if (anim->state() == AnimState::PENDING)
+            anim->reset();
+        if (!anim->isFinished())
+            anim->update(dt);
     }
-    m_animations.erase(
-        std::remove_if(m_animations.begin(), m_animations.end(),
-            [](const Entry & e) { return e.anim->isFinished(); }),
-        m_animations.end());
+
+    for (auto it = m_animations.begin(); it != m_animations.end(); )
+    {
+        if (it->second->isFinished())
+            it = m_animations.erase(it);
+        else
+            ++it;
+    }
 }
 
 int AnimationManager::add(std::unique_ptr<Animation> anim)
 {
     int id = m_nextId++;
-    m_animations.push_back({ id, std::move(anim) });
+    m_animations[id] = std::move(anim);
     return id;
 }
 
 void AnimationManager::remove(int id)
 {
-    m_animations.erase(
-        std::remove_if(m_animations.begin(), m_animations.end(),
-            [id](const Entry & e) { return e.id == id; }),
-        m_animations.end());
+    m_animations.erase(id);
 }
 
 void AnimationManager::clear() { m_animations.clear(); }
@@ -267,7 +268,7 @@ int AnimationManager::animateFloat(float start, float end, float duration,
         if (onFinish) onFinish();
     });
     int id = m_nextId++;
-    m_animations.push_back({ id, std::move(anim) });
+    m_animations[id] = std::move(anim);
     return id;
 }
 
@@ -280,7 +281,7 @@ int AnimationManager::animateVec2(Vector2 start, Vector2 end, float duration,
         if (onFinish) onFinish();
     });
     int id = m_nextId++;
-    m_animations.push_back({ id, std::move(anim) });
+    m_animations[id] = std::move(anim);
     return id;
 }
 
@@ -290,7 +291,7 @@ int AnimationManager::animateColor(Color start, Color end, float duration,
     auto anim = std::make_unique<ColorAnim>(start, end, duration, ease);
     anim->onUpdate(std::move(onUpdate));
     int id = m_nextId++;
-    m_animations.push_back({ id, std::move(anim) });
+    m_animations[id] = std::move(anim);
     return id;
 }
 
@@ -299,7 +300,7 @@ int AnimationManager::delay(float duration, std::function<void()> onFinish)
     auto anim = std::make_unique<DelayAnim>(duration);
     anim->onFinish(std::move(onFinish));
     int id = m_nextId++;
-    m_animations.push_back({ id, std::move(anim) });
+    m_animations[id] = std::move(anim);
     return id;
 }
 
@@ -309,6 +310,6 @@ int AnimationManager::shake(float intensity, float duration,
     auto anim = std::make_unique<ShakeAnim>(intensity, duration);
     anim->onUpdate(std::move(onUpdate));
     int id = m_nextId++;
-    m_animations.push_back({ id, std::move(anim) });
+    m_animations[id] = std::move(anim);
     return id;
 }

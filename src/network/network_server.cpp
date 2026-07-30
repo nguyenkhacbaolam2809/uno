@@ -1,6 +1,6 @@
 #include "network_server.h"
 #include "rules.h"
-#include <iostream>
+#include "logger.h"
 #include <cstring>
 #include <sstream>
 #include <string>
@@ -51,11 +51,11 @@ bool NetworkServer::start(int port)
 
     struct epoll_event ev;
     ev.events = EPOLLIN | EPOLLET;
-    ev.data.u32 = 0; // 0 means listen socket
+    ev.data.u32 = 0;
     epoll_ctl(epollFd, EPOLL_CTL_ADD, listenFd, &ev);
 
     running = true;
-    std::cerr << "Server started on port " << port << std::endl;
+    LOG_INFO("Server started on port %d", port);
     return true;
 }
 
@@ -136,7 +136,7 @@ void NetworkServer::handleAccept()
     ev.data.u32 = id + 1;
     epoll_ctl(epollFd, EPOLL_CTL_ADD, newFd, &ev);
 
-    std::cerr << "Player " << clientCount << " connected (id=" << id << ")" << std::endl;
+    LOG_INFO("Player %d connected (id=%d)", clientCount, id);
 }
 
 void NetworkServer::handleRead(int clientId)
@@ -152,16 +152,15 @@ void NetworkServer::handleRead(int clientId)
     {
         auto pkt = ctx.recvBuf.readPacket();
 
-        // Protocol version validation: first packet must be version match
-        if (pkt.type == PKT_HEARTBEAT)
+        if (pkt.type == PacketType::Heartbeat)
         {
             if (pkt.body.size() >= sizeof(PacketVersion))
             {
                 const PacketVersion * pv = reinterpret_cast<const PacketVersion *>(pkt.body.data());
                 if (pv->version != PROTOCOL_VERSION)
                 {
-                    std::cerr << "Client " << clientId << ": protocol version mismatch "
-                              << (int)pv->version << " != " << PROTOCOL_VERSION << std::endl;
+                    LOG_ERROR("Client %d: protocol version mismatch %d != %d",
+                              clientId, (int)pv->version, PROTOCOL_VERSION);
                     handleClose(clientId);
                     return;
                 }
@@ -171,52 +170,47 @@ void NetworkServer::handleRead(int clientId)
 
         unsigned char pid = pkt.playerId;
 
-        // Validate player ID
         if (pid >= static_cast<unsigned char>(engine.getPlayerCount()))
         {
-            std::cerr << "Player " << clientId << ": invalid pid=" << (int)pid << std::endl;
+            LOG_WARN("Player %d: invalid pid=%d", clientId, (int)pid);
             continue;
         }
 
-        // Validate packet length against expected minimum
         if (pkt.length < 2)
         {
-            std::cerr << "Player " << clientId << ": packet too short" << std::endl;
+            LOG_WARN("Player %d: packet too short", clientId);
             continue;
         }
 
-        // Body size sanity check
         if (static_cast<int>(pkt.body.size()) > 4096)
         {
-            std::cerr << "Player " << clientId << ": packet body too large: "
-                      << pkt.body.size() << std::endl;
+            LOG_WARN("Player %d: packet body too large: %zu", clientId, pkt.body.size());
             continue;
         }
 
         switch (pkt.type)
         {
-            case PKT_PLAY_CARD:
+            case PacketType::PlayCard:
             {
                 if (pkt.body.size() >= sizeof(PacketPlayCard))
                 {
                     const PacketPlayCard * pc = reinterpret_cast<const PacketPlayCard *>(pkt.body.data());
                     if (pc->chosenColor >= 1 && pc->chosenColor <= 4)
                     {
-                        const char * colorNames[] = {"", "do", "xanh la", "xanh duong", "vang"};
-                        engine.playCard(pid, pc->cardIndex, colorNames[pc->chosenColor]);
+                        engine.playCard(pid, pc->cardIndex, static_cast<CardColor>(pc->chosenColor));
                         broadcastSyncState();
                     }
                 }
                 break;
             }
-            case PKT_DRAW:
+            case PacketType::Draw:
                 if (pkt.body.size() == 0)
                 {
                     engine.drawCard(pid);
                     broadcastSyncState();
                 }
                 break;
-            case PKT_JUMP_IN:
+            case PacketType::JumpIn:
                 if (pkt.body.size() >= sizeof(PacketJumpIn))
                 {
                     const PacketJumpIn * pj = reinterpret_cast<const PacketJumpIn *>(pkt.body.data());
@@ -224,11 +218,11 @@ void NetworkServer::handleRead(int clientId)
                     broadcastSyncState();
                 }
                 break;
-            case PKT_CALL_UNO:
+            case PacketType::CallUno:
                 if (pkt.body.size() == 0)
                     engine.callUno(pid);
                 break;
-            case PKT_CATCH_UNO:
+            case PacketType::CatchUno:
                 if (pkt.body.size() >= sizeof(PacketUno))
                 {
                     const PacketUno * pu = reinterpret_cast<const PacketUno *>(pkt.body.data());
@@ -240,7 +234,7 @@ void NetworkServer::handleRead(int clientId)
                 }
                 break;
             default:
-                std::cerr << "Player " << clientId << ": unknown packet type " << (int)pkt.type << std::endl;
+                LOG_WARN("Player %d: unknown packet type %d", clientId, static_cast<int>(pkt.type));
                 break;
         }
     }
@@ -283,7 +277,7 @@ void NetworkServer::handleClose(int clientId)
     }
     clients.erase(clientId);
     clientCount--;
-    std::cerr << "Player " << clientId << " disconnected" << std::endl;
+    LOG_INFO("Player %d disconnected", clientId);
 }
 
 void NetworkServer::broadcastSyncState()
@@ -294,10 +288,10 @@ void NetworkServer::broadcastSyncState()
     int playerDataSize = 0;
     for (int i = 0; i < engine.getPlayerCount(); i++)
     {
-        const player * p = engine.getPlayer(i);
+        const Player * p = engine.getPlayer(i);
         playerDataSize += (int)sizeof(int) + (int)p->getName().length()
                         + (int)sizeof(int) + (int)sizeof(int) + (int)sizeof(int);
-        playerDataSize += p->get_size() * (int)sizeof(card);
+        playerDataSize += p->get_size() * (int)sizeof(Card);
     }
 
     int bodySize = (int)sizeof(int) + (int)sizeof(GameState) + (int)sizeof(int) + playerDataSize;
@@ -323,12 +317,12 @@ void NetworkServer::broadcastSyncState()
 
         for (int i = 0; i < pCount; i++)
         {
-            const player * p = engine.getPlayer(i);
+            const Player * p = engine.getPlayer(i);
             std::string name = p->getName();
             int nameLen = (int)name.length();
             int cardCount = p->get_size();
-            int pType = (int)p->getType();
-            int pDiff = (int)p->getDifficulty();
+            int pType = static_cast<int>(p->getType());
+            int pDiff = static_cast<int>(p->getDifficulty());
 
             std::memcpy(buf.data() + offset, &nameLen, sizeof(int));
             offset += sizeof(int);
@@ -341,15 +335,20 @@ void NetworkServer::broadcastSyncState()
             std::memcpy(buf.data() + offset, &pDiff, sizeof(int));
             offset += sizeof(int);
 
+            bool isSelf = (i == myPlayerId);
             for (int j = 0; j < cardCount; j++)
             {
-                card c = p->peek(j);
-                std::memcpy(buf.data() + offset, &c, sizeof(card));
-                offset += (int)sizeof(card);
+                Card c;
+                if (isSelf)
+                    c = p->peek(j);
+                else
+                    c = Card{ CardColor::Wild, 0 };
+                std::memcpy(buf.data() + offset, &c, sizeof(Card));
+                offset += (int)sizeof(Card);
             }
         }
 
-        ctx.sendBuf.beginPacket(PKT_SYNC_STATE, 0, bodySize);
+        ctx.sendBuf.beginPacket(static_cast<unsigned char>(PacketType::SyncState), 0, bodySize);
         ctx.sendBuf.writeBody(buf.data(), bodySize);
         ctx.sendBuf.flush(ctx.fd);
 
@@ -373,7 +372,7 @@ void NetworkServer::runGameLoop()
     {
         std::string pname = "Player ";
         pname += std::to_string(i + 1);
-        engine.addPlayer(pname, HUMAN, 0);
+        engine.addPlayer(pname, PlayerType::Human, 0);
     }
 
     engine.start();
@@ -413,6 +412,6 @@ void NetworkServer::runGameLoop()
     {
         int winner = engine.getWinner();
         if (winner >= 0)
-            std::cerr << engine.getPlayer(winner)->getName() << " wins!" << std::endl;
+            LOG_INFO("%s wins!", engine.getPlayer(winner)->getName().c_str());
     }
 }

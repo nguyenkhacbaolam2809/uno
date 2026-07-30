@@ -8,11 +8,8 @@
 template <typename T>
 class Result {
 public:
-    Result(T val) : m_value(std::move(val)) {}
-    Result(std::string err) : m_error(std::move(err)) {}
-
-    static Result ok(T val) { return Result(std::move(val)); }
-    static Result fail(std::string err) { return Result(std::move(err)); }
+    static Result ok(T val) { return Result(OkTag{}, std::move(val)); }
+    static Result fail(std::string err) { return Result(FailTag{}, std::move(err)); }
 
     bool isOk() const { return m_value.has_value(); }
     bool isFail() const { return !m_value.has_value(); }
@@ -26,6 +23,12 @@ public:
     T valueOr(T fallback) const { return m_value.value_or(fallback); }
 
 private:
+    struct OkTag {};
+    struct FailTag {};
+
+    Result(OkTag, T val) : m_value(std::move(val)) {}
+    Result(FailTag, std::string err) : m_error(std::move(err)) {}
+
     std::optional<T> m_value;
     std::string m_error;
 };
@@ -35,8 +38,6 @@ class Result<void> {
 public:
     static Result ok() { return Result(); }
     static Result fail(std::string err) { return Result(std::move(err)); }
-    Result() : m_hasError(false) {}
-    Result(std::string err) : m_hasError(true), m_error(std::move(err)) {}
 
     bool isOk() const { return !m_hasError; }
     bool isFail() const { return m_hasError; }
@@ -44,6 +45,9 @@ public:
     const std::string & error() const { return m_error; }
 
 private:
+    Result() : m_hasError(false) {}
+    Result(std::string err) : m_hasError(true), m_error(std::move(err)) {}
+
     bool m_hasError;
     std::string m_error;
 };

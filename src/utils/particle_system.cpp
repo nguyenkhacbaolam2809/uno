@@ -11,6 +11,14 @@ ParticleSystem & ParticleSystem::instance()
 
 void ParticleSystem::spawn(Particle p)
 {
+    for (auto & particle : m_particles)
+    {
+        if (!particle.active)
+        {
+            particle = p;
+            return;
+        }
+    }
     m_particles.push_back(p);
 }
 
@@ -23,18 +31,13 @@ void ParticleSystem::update(float dt)
         p.pos.y += p.vel.y * dt;
         p.life -= dt;
         float t = 1.0f - std::max(p.life / p.maxLife, 0.0f);
-        p.color.r = (unsigned char)(p.color.r + (p.endColor.r - p.color.r) * t);
-        p.color.g = (unsigned char)(p.color.g + (p.endColor.g - p.color.g) * t);
-        p.color.b = (unsigned char)(p.color.b + (p.endColor.b - p.color.b) * t);
-        p.color.a = (unsigned char)(p.color.a + (p.endColor.a - p.color.a) * t);
-        p.size = p.size + (p.endSize - p.size) * t;
+        p.color.r = (unsigned char)(p.startColor.r + (p.endColor.r - p.startColor.r) * t);
+        p.color.g = (unsigned char)(p.startColor.g + (p.endColor.g - p.startColor.g) * t);
+        p.color.b = (unsigned char)(p.startColor.b + (p.endColor.b - p.startColor.b) * t);
+        p.color.a = (unsigned char)(p.startColor.a + (p.endColor.a - p.startColor.a) * t);
+        p.size = p.startSize + (p.endSize - p.startSize) * t;
         if (p.life <= 0) p.active = false;
     }
-
-    m_particles.erase(
-        std::remove_if(m_particles.begin(), m_particles.end(),
-            [](const Particle & p) { return !p.active; }),
-        m_particles.end());
 }
 
 void ParticleSystem::render()
@@ -58,10 +61,12 @@ void ParticleSystem::burst(const ParticleBurstConfig & cfg)
         p.pos = cfg.origin;
         p.vel = { std::cos(angle) * speed, std::sin(angle) * speed };
         p.color = cfg.colorStart;
+        p.startColor = cfg.colorStart;
         p.endColor = cfg.colorEnd;
         p.life = life;
         p.maxLife = life;
         p.size = size;
+        p.startSize = size;
         p.endSize = 0;
         p.active = true;
         spawn(p);
@@ -74,14 +79,23 @@ void ParticleSystem::emit(Vector2 pos, Vector2 vel, Color color, float life, flo
     p.pos = pos;
     p.vel = vel;
     p.color = color;
+    p.startColor = color;
     p.endColor = Fade(color, 0);
     p.life = life;
     p.maxLife = life;
     p.size = size;
+    p.startSize = size;
     p.endSize = 0;
     p.active = true;
     spawn(p);
 }
 
-int ParticleSystem::activeCount() const noexcept { return (int)m_particles.size(); }
+int ParticleSystem::activeCount() const noexcept
+{
+    int count = 0;
+    for (auto & p : m_particles)
+        if (p.active) count++;
+    return count;
+}
+
 void ParticleSystem::clear() { m_particles.clear(); }

@@ -10,13 +10,13 @@ using uno::WILD_BG;
 
 namespace card_renderer {
 
-static const char * cardLabel(const card & c)
+static const char * cardLabel(const Card & c)
 {
     switch (c.number)
     {
         case CARD_DRAW_TWO:       return "+2";
-        case CARD_SKIP:           return "\xe2\x9c\x97";  // ✗
-        case CARD_REVERSE:        return "\xe2\x86\xbb";  // ↻
+        case CARD_SKIP:           return "\xe2\x9c\x97";
+        case CARD_REVERSE:        return "\xe2\x86\xbb";
         case CARD_WILD:           return "W";
         case CARD_WILD_DRAW_FOUR: return "+4";
         default:
@@ -24,21 +24,21 @@ static const char * cardLabel(const card & c)
     }
 }
 
-static void drawCardBody(int x, int y, int w, int h, COLOR col, float scale)
+static void drawCardBody(int x, int y, int w, int h, CardColor col, float scale)
 {
     Color color = uno::toRaylibColor(col);
-    if (col == wild)
+    if (col == CardColor::Wild)
         color = WILD_BG;
 
     drawRoundedRect(x, y, w, h, static_cast<int>(CARD_RADIUS * scale), color);
 
     int inset = static_cast<int>(4 * scale);
     Color innerGray = { 80, 80, 80, 255 };
-    Color inner = (col == wild) ? innerGray : Fade(color, 0.4f);
+    Color inner = (col == CardColor::Wild) ? innerGray : Fade(color, 0.4f);
     drawRoundedRect(x + inset, y + inset, w - 2 * inset, h - 2 * inset,
                     static_cast<int>(CARD_RADIUS * scale / 2), inner);
 
-    if (col == wild)
+    if (col == CardColor::Wild)
     {
         int stripH = static_cast<int>(20 * scale);
         int stripY = y + h / 2 - stripH / 2;
@@ -48,7 +48,7 @@ static void drawCardBody(int x, int y, int w, int h, COLOR col, float scale)
     }
 }
 
-static void drawCardText(int x, int y, int w, int h, const card & c, float scale)
+static void drawCardText(int x, int y, int w, int h, const Card & c, float scale)
 {
     const char * label = cardLabel(c);
     int fontSize = static_cast<int>(36 * scale);
@@ -61,7 +61,7 @@ static void drawCardText(int x, int y, int w, int h, const card & c, float scale
 
     Color darkYellow = { 60, 40, 0, 255 };
     Color shadowColor = { 0, 0, 0, 100 };
-    Color textColor = (c.color == yellow) ? darkYellow : WHITE;
+    Color textColor = (c.color == CardColor::Yellow) ? darkYellow : WHITE;
 
     DrawText(label, textX + 1, textY + 1, fontSize, shadowColor);
     DrawText(label, textX, textY, fontSize, textColor);
@@ -97,7 +97,7 @@ static void drawCardText(int x, int y, int w, int h, const card & c, float scale
     }
 }
 
-void drawCard(const card & c, int x, int y, float scale)
+void drawCard(const Card & c, int x, int y, float scale)
 {
     int w = static_cast<int>(CARD_WIDTH * scale);
     int h = static_cast<int>(CARD_HEIGHT * scale);

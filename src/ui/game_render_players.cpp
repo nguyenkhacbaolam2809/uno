@@ -32,7 +32,7 @@ void GameView::renderOpponents(const GameEngine & engine, int localPlayerId)
         DrawRectangleRounded(slotRect, 0.3f, 10, Fade(BLACK, 0.3f));
         DrawRectangleRoundedLines(slotRect, 0.3f, 10, 1, Fade(WHITE, 0.15f));
 
-        const player * p = engine.getPlayer(i);
+        const Player * p = engine.getPlayer(i);
         int cardCount = p->get_size();
         bool isCurrentTurn = (engine.getCurrentTurn() % n) == i;
         Color nameCol = isCurrentTurn ? GOLD_COLOR : WHITE_SMOKE;
@@ -55,12 +55,12 @@ void GameView::renderOpponents(const GameEngine & engine, int localPlayerId)
         oppIdx++;
     }
 
-    if (engine.getPhase() == PHASE_GAME_OVER)
+    if (engine.getPhase() == GamePhase::GameOver)
     {
         int winner = engine.getWinner();
         if (winner >= 0)
         {
-            const player * wp = engine.getPlayer(winner);
+            const Player * wp = engine.getPlayer(winner);
             std::string wtxt = wp->getName() + " wins!";
             int tw = MeasureText(wtxt.c_str(), 36);
             Color overlayBg = { 0, 0, 0, 180 };

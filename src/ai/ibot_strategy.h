@@ -10,14 +10,14 @@ class IBotStrategy
 public:
     virtual ~IBotStrategy() = default;
 
-    virtual int pickCard(player * self, const card & current,
+    virtual int pickCard(Player * self, const Card & current,
                          int direction, int selfIdx,
                          const int * opponentSizes, int opponentCount,
                          int drawStack) = 0;
 
-    virtual COLOR pickColor(player * self) = 0;
+    virtual CardColor pickColor(Player * self) = 0;
 
-    virtual bool shouldJumpIn(player * self, const card & target) = 0;
+    virtual bool shouldJumpIn(Player * self, const Card & target) = 0;
 
     virtual std::unique_ptr<IBotStrategy> clone() const = 0;
 };

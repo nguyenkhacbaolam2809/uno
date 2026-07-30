@@ -1,22 +1,19 @@
 #include "card.h"
 
-card::card() noexcept : number(0), color(wild)
+Card::Card() noexcept : number(0), color(CardColor::Wild)
 {
 }
 
-card::card(int num, COLOR col) noexcept : number(num), color(col)
+Card::Card(int num, CardColor col) noexcept : number(num), color(col)
 {
 }
 
-bool card::operator==(card const & other) const noexcept
+bool Card::operator==(Card const & other) const noexcept
 {
-    return number == other.number || color == other.color
-        || color == wild || other.color == wild;
+    return number == other.number && color == other.color;
 }
 
-bool card::operator!=(card const & other) const noexcept
+bool Card::operator!=(Card const & other) const noexcept
 {
     return !(*this == other);
 }
-
-

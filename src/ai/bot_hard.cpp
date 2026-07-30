@@ -16,7 +16,7 @@ HardBotStrategy::HardBotStrategy(const HardBotStrategy & other)
 }
 
 void HardBotStrategy::detectDrewCards(const int * opponentSizes, int opponentCount,
-                                      const card & current)
+                                      const Card & current)
 {
     if (!initialized)
     {
@@ -28,29 +28,29 @@ void HardBotStrategy::detectDrewCards(const int * opponentSizes, int opponentCou
 
     for (int i = 0; i < opponentCount; i++)
     {
-        if (opponentSizes[i] > prevOppSizes[i] && current.color >= 1 && current.color <= 4)
+        if (opponentSizes[i] > prevOppSizes[i] && current.color >= CardColor::Red && current.color <= CardColor::Yellow)
         {
-            forcedColors[current.color - 1]++;
+            forcedColors[static_cast<int>(current.color) - 1]++;
         }
         prevOppSizes[i] = opponentSizes[i];
     }
 }
 
-int HardBotStrategy::findStackDefense(player * self, const card & current,
+int HardBotStrategy::findStackDefense(Player * self, const Card & current,
                                       int drawStack) const
 {
     if (drawStack <= 0) return -1;
 
     for (int i = 0; i < self->get_size(); i++)
     {
-        card c = self->peek(i);
+        Card c = self->peek(i);
         if (::isStackCard(c) && ::canPlayCard(c, current))
             return i;
     }
     return -1;
 }
 
-int HardBotStrategy::findThreatBlock(player * self, const card & current,
+int HardBotStrategy::findThreatBlock(Player * self, const Card & current,
                                      int direction, int selfIdx,
                                      const int * opponentSizes, int opponentCount) const
 {
@@ -60,7 +60,7 @@ int HardBotStrategy::findThreatBlock(player * self, const card & current,
     {
         for (int i = 0; i < self->get_size(); i++)
         {
-            card c = self->peek(i);
+            Card c = self->peek(i);
             if (!::canPlayCard(c, current)) continue;
             if (c.number == 11 || c.number == 12 || ::isStackCard(c))
                 return i;
@@ -69,7 +69,7 @@ int HardBotStrategy::findThreatBlock(player * self, const card & current,
     return -1;
 }
 
-int HardBotStrategy::pickCard(player * self, const card & current,
+int HardBotStrategy::pickCard(Player * self, const Card & current,
                               int direction, int selfIdx,
                               const int * opponentSizes, int opponentCount,
                               int drawStack)
@@ -91,7 +91,7 @@ int HardBotStrategy::pickCard(player * self, const card & current,
 
     for (int i = 0; i < self->get_size(); i++)
     {
-        card c = self->peek(i);
+        Card c = self->peek(i);
         if (!::canPlayCard(c, current)) continue;
 
         if (c.number == 13 || c.number == 14)
@@ -109,7 +109,7 @@ int HardBotStrategy::pickCard(player * self, const card & current,
     return -1;
 }
 
-COLOR HardBotStrategy::pickColor(player * self) noexcept
+CardColor HardBotStrategy::pickColor(Player * self) noexcept
 {
     int bestCount = -1;
     int bestCol = 1;
@@ -120,10 +120,10 @@ COLOR HardBotStrategy::pickColor(player * self) noexcept
 
         for (int i = 0; i < self->get_size(); i++)
         {
-            card c = self->peek(i);
-            if (c.color == col && c.number < 13)
+            Card c = self->peek(i);
+            if (c.color == static_cast<CardColor>(col) && c.number < 13)
                 total += 3;
-            else if (c.color == col)
+            else if (c.color == static_cast<CardColor>(col))
                 total += 1;
         }
 
@@ -134,14 +134,14 @@ COLOR HardBotStrategy::pickColor(player * self) noexcept
         }
     }
 
-    return static_cast<COLOR>(bestCol);
+    return static_cast<CardColor>(bestCol);
 }
 
-bool HardBotStrategy::shouldJumpIn(player * self, const card & target) noexcept
+bool HardBotStrategy::shouldJumpIn(Player * self, const Card & target) noexcept
 {
     for (int i = 0; i < self->get_size(); i++)
     {
-        card c = self->peek(i);
+        Card c = self->peek(i);
         if (::canJumpIn(c, target))
             return true;
     }

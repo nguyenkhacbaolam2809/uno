@@ -1,10 +1,9 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-enum OSType { OS_UBUNTU, OS_WINDOWS };
-enum Language { LANG_ENGLISH, LANG_VIETNAMESE };
+enum class Language { English, Vietnamese };
+
 struct GameConfig {
-    OSType os;
     Language lang;
 };
 

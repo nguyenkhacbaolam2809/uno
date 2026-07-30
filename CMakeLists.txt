@@ -69,6 +69,7 @@ add_library(utils
     src/utils/particle_system.cpp
     src/utils/debug_overlay.cpp
     src/utils/audio_manager.cpp
+    src/utils/settings.cpp
 )
 
 target_include_directories(utils PUBLIC
@@ -89,6 +90,7 @@ add_executable(gameuno
     src/ui/game_render_ui.cpp
     src/ui/game_render_effects.cpp
     src/ui/menu_view.cpp
+    src/ui/console_ui.cpp
     src/engine/game_state.cpp
 )
 
@@ -110,7 +112,17 @@ if(NOT WIN32)
     target_link_libraries(gameuno PRIVATE network)
 endif()
 
-if(ENABLE_SANITIZERS)
+if(MSVC)
+    target_compile_options(gamecore PRIVATE /W4 /WX /permissive-)
+    target_compile_options(utils PRIVATE /W4 /WX /permissive-)
+    target_compile_options(gameuno PRIVATE /W4 /WX /permissive- /O2)
+else()
+    target_compile_options(gamecore PRIVATE -Wall -Wextra -Wshadow -Wpedantic -Werror)
+    target_compile_options(utils PRIVATE -Wall -Wextra -Wshadow -Wpedantic -Werror)
+    target_compile_options(gameuno PRIVATE -Wall -Wextra -Wshadow -Wpedantic -Werror -O2)
+endif()
+
+if(ENABLE_SANITIZERS AND NOT WIN32)
     target_compile_options(gamecore PRIVATE -fsanitize=address,undefined)
     target_compile_options(utils PRIVATE -fsanitize=address,undefined)
     target_compile_options(gameuno PRIVATE -fsanitize=address,undefined)
@@ -121,13 +133,6 @@ if(ENABLE_SANITIZERS)
         target_compile_options(network PRIVATE -fsanitize=address,undefined)
         target_link_libraries(network PRIVATE -fsanitize=address,undefined)
     endif()
-endif()
-
-target_compile_options(gamecore PRIVATE -Wall -Wextra -Wshadow -Wpedantic -Werror)
-target_compile_options(utils PRIVATE -Wall -Wextra -Wshadow -Wpedantic -Werror)
-target_compile_options(gameuno PRIVATE -Wall -Wextra -Wshadow -Wpedantic -Werror -O2)
-if(NOT WIN32)
-    target_compile_options(network PRIVATE -Wall -Wextra -Wshadow -Wpedantic -Werror)
 endif()
 
 if(BUILD_TESTS)
@@ -141,5 +146,9 @@ if(BUILD_TESTS)
         ${CMAKE_CURRENT_SOURCE_DIR}/src/utils
     )
     target_link_libraries(test_all gamecore)
-    target_compile_options(test_all PRIVATE -Wall -Wextra -Wshadow -Wpedantic -Werror -O2)
+    if(MSVC)
+        target_compile_options(test_all PRIVATE /W4 /WX /permissive- /O2)
+    else()
+        target_compile_options(test_all PRIVATE -Wall -Wextra -Wshadow -Wpedantic -Werror -O2)
+    endif()
 endif()

@@ -8,7 +8,7 @@
 
 namespace card_renderer {
 
-void drawCard(const card & c, int x, int y, float scale = 1.0f);
+void drawCard(const Card & c, int x, int y, float scale = 1.0f);
 void drawBack(int x, int y, float scale = 1.0f);
 void drawRoundedRect(int x, int y, int w, int h, int radius, Color color);
 bool isHovered(int x, int y, int w, int h);

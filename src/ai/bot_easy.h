@@ -7,14 +7,14 @@
 class EasyBotStrategy : public IBotStrategy
 {
 public:
-    int pickCard(player * self, const card & current,
+    int pickCard(Player * self, const Card & current,
                  int direction, int selfIdx,
                  const int * opponentSizes, int opponentCount,
                  int drawStack) override;
 
-    COLOR pickColor(player * self) noexcept override;
+    CardColor pickColor(Player * self) noexcept override;
 
-    bool shouldJumpIn(player * self, const card & target) noexcept override;
+    bool shouldJumpIn(Player * self, const Card & target) noexcept override;
 
     std::unique_ptr<IBotStrategy> clone() const override;
 };

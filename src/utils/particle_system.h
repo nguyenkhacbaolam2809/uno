@@ -9,10 +9,12 @@ struct Particle {
     Vector2 vel;
     Color color;
     Color endColor;
+    Color startColor;
     float life;
     float maxLife;
     float size;
     float endSize;
+    float startSize;
     bool active;
 };
 

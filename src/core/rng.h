@@ -5,7 +5,7 @@
 
 inline std::mt19937 & rng()
 {
-    static std::mt19937 instance{ std::random_device{}() };
+    static std::mt19937 instance(std::random_device{}());
     return instance;
 }
 

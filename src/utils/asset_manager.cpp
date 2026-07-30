@@ -19,7 +19,7 @@ Result<Texture2D> AssetManager::loadTexture(const std::string & path)
     if (it != m_textures.end())
     {
         it->second.refCount++;
-        return it->second.tex;
+        return Result<Texture2D>::ok(it->second.tex);
     }
 
     Texture2D tex = ::LoadTexture(path.c_str());
@@ -27,7 +27,7 @@ Result<Texture2D> AssetManager::loadTexture(const std::string & path)
         return Result<Texture2D>::fail("Failed to load texture: " + path);
 
     m_textures[path] = { tex, 1 };
-    return tex;
+    return Result<Texture2D>::ok(tex);
 }
 
 Result<Font> AssetManager::loadFont(const std::string & path, int fontSize)
@@ -37,7 +37,7 @@ Result<Font> AssetManager::loadFont(const std::string & path, int fontSize)
     if (it != m_fonts.end())
     {
         it->second.refCount++;
-        return it->second.font;
+        return Result<Font>::ok(it->second.font);
     }
 
     Font f = ::LoadFontEx(path.c_str(), fontSize, nullptr, 0);
@@ -45,7 +45,7 @@ Result<Font> AssetManager::loadFont(const std::string & path, int fontSize)
         return Result<Font>::fail("Failed to load font: " + path);
 
     m_fonts[key] = { f, 1 };
-    return f;
+    return Result<Font>::ok(f);
 }
 
 Result<Sound> AssetManager::loadSound(const std::string & path)
@@ -54,7 +54,7 @@ Result<Sound> AssetManager::loadSound(const std::string & path)
     if (it != m_sounds.end())
     {
         it->second.refCount++;
-        return it->second.sound;
+        return Result<Sound>::ok(it->second.sound);
     }
 
     Sound s = ::LoadSound(path.c_str());
@@ -62,7 +62,7 @@ Result<Sound> AssetManager::loadSound(const std::string & path)
         return Result<Sound>::fail("Failed to load sound: " + path);
 
     m_sounds[path] = { s, 1 };
-    return s;
+    return Result<Sound>::ok(s);
 }
 
 Result<Music> AssetManager::loadMusic(const std::string & path)
@@ -71,7 +71,7 @@ Result<Music> AssetManager::loadMusic(const std::string & path)
     if (it != m_music.end())
     {
         it->second.refCount++;
-        return it->second.music;
+        return Result<Music>::ok(it->second.music);
     }
 
     Music m = ::LoadMusicStream(path.c_str());
@@ -79,7 +79,7 @@ Result<Music> AssetManager::loadMusic(const std::string & path)
         return Result<Music>::fail("Failed to load music: " + path);
 
     m_music[path] = { m, 1 };
-    return m;
+    return Result<Music>::ok(m);
 }
 
 void AssetManager::unloadTexture(const std::string & path)

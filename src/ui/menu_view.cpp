@@ -17,7 +17,7 @@ MenuView::MenuView(const GameConfig & cfg) : config(cfg)
 
 const char * MenuView::msg(int id) const
 {
-    if (config.lang == LANG_ENGLISH)
+    if (config.lang == Language::English)
     {
         switch (id)
         {
@@ -454,6 +454,73 @@ MenuResult MenuView::showMixedSetup()
         if (CheckCollisionPointRec(GetMousePosition(), startBtn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
         {
             result.confirmed = true;
+            EndDrawing();
+            return result;
+        }
+
+        EndDrawing();
+    }
+
+    result.action = -1;
+    result.confirmed = false;
+    return result;
+}
+
+MenuResult MenuView::showColorPicker()
+{
+    MenuResult result;
+    result.confirmed = true;
+    result.action = 6;
+
+    while (!WindowShouldClose())
+    {
+        BeginDrawing();
+        ClearBackground(BG_DARK);
+
+        drawTitle(msg(20), SCREEN_H / 2 - 160, 36, WHITE_SMOKE);
+
+        Color redCol = { 237, 28, 36, 255 };
+        Color blueCol = { 0, 114, 188, 255 };
+        Color greenCol = { 0, 155, 72, 255 };
+        Color yellowCol = { 255, 205, 0, 255 };
+        struct { int id; Color c; const char * label; } colors[4] = {
+            { 1, redCol, "RED" },
+            { 2, blueCol, "BLUE" },
+            { 3, greenCol, "GREEN" },
+            { 4, yellowCol, "YELLOW" }
+        };
+
+        int btnW = 120, btnH = 80, gap = 20;
+        int totalW = 4 * btnW + 3 * gap;
+        int startX = (SCREEN_W - totalW) / 2;
+        int startY = SCREEN_H / 2 - btnH / 2;
+
+        for (int i = 0; i < 4; i++)
+        {
+            Rectangle r = { (float)(startX + i * (btnW + gap)), (float)startY, (float)btnW, (float)btnH };
+            Color c = colors[i].c;
+            if (CheckCollisionPointRec(GetMousePosition(), r))
+                c = Fade(c, 0.7f);
+            DrawRectangleRounded(r, 0.3f, 10, c);
+
+            int lw = MeasureText(colors[i].label, 16);
+            DrawText(colors[i].label, (int)(r.x + (r.width - lw) / 2), (int)(r.y + (r.height - 16) / 2), 16, WHITE);
+
+            if (CheckCollisionPointRec(GetMousePosition(), r) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+            {
+                result.action = colors[i].id;
+                EndDrawing();
+                return result;
+            }
+        }
+
+        Rectangle backBtn = { (float)(SCREEN_W / 2 - 70), (float)(startY + btnH + 40), 140, 40 };
+        DrawRectangleRounded(backBtn, 0.3f, 10, Color{ 80, 80, 80, 255 });
+        drawTextCentered(msg(17), startY + btnH + 44, 20, WHITE);
+        if (CheckCollisionPointRec(GetMousePosition(), backBtn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        {
+            result.action = -1;
+            result.confirmed = false;
             EndDrawing();
             return result;
         }

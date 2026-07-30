@@ -10,7 +10,6 @@ using uno::CARD_HEIGHT;
 using uno::BG_GREEN;
 using uno::GOLD_COLOR;
 
-// Background rendering
 void GameView::renderBackground()
 {
     DrawRectangle(0, 0, SCREEN_W, SCREEN_H, BG_GREEN);
@@ -46,7 +45,7 @@ void GameView::renderPiles(const GameEngine & engine)
     Rectangle discRect = { (float)discX, (float)discY, (float)pileW, (float)pileH };
     DrawRectangleRounded(discRect, 0.3f, 10, discBg);
 
-    card current = engine.getCurrentCard();
+    Card current = engine.getCurrentCard();
     card_renderer::drawCard(current, discX + 4, discY + 4, 1.0f);
     DrawText("PLAY", discX + 10, discY + pileH + 8, 14, Fade(WHITE, 0.6f));
 

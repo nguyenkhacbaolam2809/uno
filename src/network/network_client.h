@@ -15,7 +15,7 @@ struct SyncPlayer
     std::string name;
     PlayerType type;
     BotDifficulty difficulty;
-    std::vector<card> hand;
+    std::vector<Card> hand;
 };
 
 struct SyncState
@@ -34,7 +34,7 @@ public:
     bool connect(const std::string & host, int port = DEFAULT_PORT);
     void disconnect();
     bool receiveSyncState(SyncState & state, int timeoutMs = 100);
-    bool sendPlayCard(int cardIdx, const std::string & chosenColor, int playerId);
+    bool sendPlayCard(int cardIdx, unsigned char chosenColor, int playerId);
     bool sendDraw(int playerId);
     bool sendJumpIn(int cardIdx, int playerId);
     bool sendCallUno(int playerId);

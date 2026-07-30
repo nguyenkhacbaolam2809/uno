@@ -7,9 +7,9 @@ std::unique_ptr<IBotStrategy> createBotStrategy(BotDifficulty diff) noexcept
 {
     switch (diff)
     {
-        case D_EASY:   return std::make_unique<EasyBotStrategy>();
-        case D_NORMAL: return std::make_unique<MediumBotStrategy>();
-        case D_HARD:   return std::make_unique<HardBotStrategy>();
-        default:       return std::make_unique<EasyBotStrategy>();
+        case BotDifficulty::Easy:   return std::make_unique<EasyBotStrategy>();
+        case BotDifficulty::Normal: return std::make_unique<MediumBotStrategy>();
+        case BotDifficulty::Hard:   return std::make_unique<HardBotStrategy>();
+        default:                    return std::make_unique<EasyBotStrategy>();
     }
 }

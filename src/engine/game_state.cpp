@@ -34,7 +34,6 @@ AppStateId MenuState::update()
 
 void MenuState::render()
 {
-    // MenuView handles its own rendering in show()
 }
 
 // --- PlayingState ---
@@ -63,25 +62,25 @@ void PlayingState::enter()
     for (int i = 0; i < total; i++)
     {
         std::string name;
-        PlayerType type = HUMAN;
+        PlayerType type = PlayerType::Human;
         int diff = 0;
 
         if (m_lobby.numHumans > 1)
         {
             name = "Player " + std::to_string(i + 1);
-            type = HUMAN;
+            type = PlayerType::Human;
         }
         else
         {
             if (i == 0)
             {
                 name = "Player";
-                type = HUMAN;
+                type = PlayerType::Human;
             }
             else
             {
                 name = "Bot " + std::to_string(i);
-                type = BOT;
+                type = PlayerType::Bot;
                 diff = m_lobby.botDifficulty - 1;
             }
         }
@@ -100,14 +99,22 @@ AppStateId PlayingState::update()
     if (m_engine.isGameOver())
     {
         LOG_INFO("Game over, winner: %d", m_engine.getWinner());
-        int winner = m_engine.getWinner();
-        AudioManager::instance().playSound(winner == m_localPlayerId ? SoundId::WIN : SoundId::LOSE);
-        m_gameView->showGameOver(m_engine);
-        return AppStateId::EXIT;
+        return AppStateId::GAME_OVER;
     }
 
     processTurnLocal();
     return AppStateId::PLAYING_LOCAL;
+}
+
+GameOverInfo PlayingState::getGameOverInfo() const
+{
+    GameOverInfo info;
+    info.winner = m_engine.getWinner();
+    info.localPlayerId = m_localPlayerId;
+    info.playerNames.clear();
+    for (int i = 0; i < m_engine.getPlayerCount(); i++)
+        info.playerNames.push_back(m_engine.getPlayer(i)->getName());
+    return info;
 }
 
 void PlayingState::render()
@@ -115,19 +122,7 @@ void PlayingState::render()
     m_gameView->render(m_engine, m_localPlayerId);
 }
 
-static const char * colorToString(COLOR c)
-{
-    switch (c)
-    {
-        case red:    return "do";
-        case green:  return "xanh la";
-        case blue:   return "xanh duong";
-        case yellow: return "vang";
-        default:     return "do";
-    }
-}
-
-static SoundId cardSound(const card & c)
+static SoundId cardSound(const Card & c)
 {
     if (c.number == CARD_SKIP) return SoundId::SKIP;
     if (c.number == CARD_REVERSE) return SoundId::REVERSE;
@@ -140,27 +135,43 @@ void PlayingState::processTurnLocal()
 {
     int n = m_engine.getPlayerCount();
     int currentTurn = m_engine.getCurrentTurn() % n;
-    const player * p = m_engine.getPlayer(currentTurn);
+    const Player * p = m_engine.getPlayer(currentTurn);
 
     if (p->isBot())
     {
-        double waitUntil = GetTime() + 0.5;
-        while (GetTime() < waitUntil)
+        static double botTimer = 0.0;
+
+        double now = GetTime();
+        if (botTimer == 0.0)
+            botTimer = now + 0.5;
+
+        if (now < botTimer)
         {
-            if (WindowShouldClose()) return;
             BeginDrawing();
             m_gameView->render(m_engine, m_localPlayerId);
             EndDrawing();
+            return;
         }
 
+        botTimer = 0.0;
+
         BotActionResult act = m_engine.executeBotTurn(currentTurn);
-        if (act.action == BOT_PLAY_CARD)
+
+        if (act.action == BotAction::Draw)
         {
-            card c = p->peek(act.cardIdx);
-            AudioManager::instance().playSound(cardSound(c));
+            m_engine.drawCard(currentTurn);
+            m_engine.nextTurn();
         }
-        m_engine.playCard(currentTurn, act.cardIdx, colorToString(act.chosenColor));
-        m_engine.nextTurn();
+        else
+        {
+            if (act.action == BotAction::PlayCard)
+            {
+                Card c = p->peek(act.cardIdx);
+                AudioManager::instance().playSound(cardSound(c));
+            }
+            m_engine.playCard(currentTurn, act.cardIdx, act.chosenColor);
+            m_engine.nextTurn();
+        }
     }
     else
     {
@@ -179,10 +190,9 @@ void PlayingState::processTurnLocal()
             {
                 if (m_engine.validatePlay(m_localPlayerId, r.cardIndex))
                 {
-                    card c = m_engine.getPlayer(m_localPlayerId)->peek(r.cardIndex);
+                    Card c = m_engine.getPlayer(m_localPlayerId)->peek(r.cardIndex);
                     AudioManager::instance().playSound(cardSound(c));
-                    m_engine.playCard(m_localPlayerId, r.cardIndex,
-                                     colorToString(r.chosenColor));
+                    m_engine.playCard(m_localPlayerId, r.cardIndex, r.chosenColor);
                     drewCard = false;
                     m_engine.nextTurn();
                     turnDone = true;
@@ -214,10 +224,69 @@ void PlayingState::processTurnLocal()
         }
     }
 
-    if (m_engine.isGameOver())
-    {
-        // sound played in update()
-    }
+}
+
+// --- GameOverState ---
+GameOverState::GameOverState(const GameOverInfo & info)
+    : m_info(info)
+{
+}
+
+void GameOverState::enter()
+{
+    if (m_entered) return;
+    m_entered = true;
+    AudioManager::instance().playSound(
+        m_info.winner == m_info.localPlayerId ? SoundId::WIN : SoundId::LOSE);
+}
+
+AppStateId GameOverState::update()
+{
+    if (WindowShouldClose()) return AppStateId::EXIT;
+    if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE) || IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        return AppStateId::MENU;
+    return AppStateId::GAME_OVER;
+}
+
+void GameOverState::render()
+{
+    std::string msg;
+    if (m_info.winner >= 0 && m_info.winner < (int)m_info.playerNames.size())
+        msg = m_info.playerNames[m_info.winner] + " wins!";
+    else
+        msg = "Game over!";
+
+    Color bgColor = { 30, 80, 40, 255 };
+    ClearBackground(bgColor);
+
+    int tw = MeasureText(msg.c_str(), 48);
+    DrawText(msg.c_str(), (uno::SCREEN_W - tw) / 2, uno::SCREEN_H / 2 - 60, 48, uno::GOLD_COLOR);
+
+    const char * sub = "Press ENTER or click to continue";
+    int sw = MeasureText(sub, 20);
+    DrawText(sub, (uno::SCREEN_W - sw) / 2, uno::SCREEN_H / 2 + 20, 20, Fade(WHITE, 0.7f));
+
+    ParticleSystem::instance().update(GetFrameTime());
+    ParticleSystem::instance().render();
+}
+
+// --- LobbyState ---
+LobbyState::LobbyState(const GameConfig & cfg, const LobbyConfig & lobby)
+    : m_config(cfg), m_lobby(lobby)
+{
+}
+
+AppStateId LobbyState::update()
+{
+    if (WindowShouldClose()) return AppStateId::EXIT;
+    return AppStateId::PLAYING_LOCAL;
+}
+
+void LobbyState::render()
+{
+    Color bgColor = { 30, 30, 40, 255 };
+    ClearBackground(bgColor);
+    DrawText("Starting game...", uno::SCREEN_W / 2 - 80, uno::SCREEN_H / 2 - 10, 20, WHITE);
 }
 
 // --- AppStateMachine ---
@@ -257,23 +326,36 @@ void AppStateMachine::run()
             m_currentState->enter();
             AppStateId nextId = m_currentState->update();
 
+            BeginDrawing();
             if (m_currentId == AppStateId::PLAYING_LOCAL)
             {
-                BeginDrawing();
                 Color bgColor = { 30, 80, 40, 255 };
-ClearBackground(bgColor);
+                ClearBackground(bgColor);
                 m_currentState->render();
 
                 DebugOverlay::instance().update(GetFrameTime());
                 DebugOverlay::instance().setInfo("State", "PlayingLocal");
-                DebugOverlay::instance().setInfo("Anims", TextFormat("%d", AnimationManager::instance().activeCount()));
-                DebugOverlay::instance().setInfo("Particles", TextFormat("%d", ParticleSystem::instance().activeCount()));
-                DebugOverlay::instance().render();
-
-                EndDrawing();
+            }
+            else
+            {
+                m_currentState->render();
             }
 
+            DebugOverlay::instance().setInfo("Anims", TextFormat("%d", AnimationManager::instance().activeCount()));
+            DebugOverlay::instance().setInfo("Particles", TextFormat("%d", ParticleSystem::instance().activeCount()));
+            DebugOverlay::instance().render();
+            EndDrawing();
+
             m_currentState->exit();
+
+            // Extract GameOverInfo from PlayingState before it's destroyed
+            if (m_currentId == AppStateId::PLAYING_LOCAL && nextId == AppStateId::GAME_OVER)
+                extractGameOverFromPlaying();
+
+            // Extract lobby config from MenuState
+            if (m_currentId == AppStateId::MENU && nextId == AppStateId::LOBBY)
+                extractLobbyFromMenu();
+
             transitionTo(nextId);
         }
         else
@@ -287,6 +369,28 @@ ClearBackground(bgColor);
     Settings::instance().setFloat("audio.effects", AudioManager::instance().effectsVolume());
     Settings::instance().setBool("audio.muted", AudioManager::instance().isMuted());
     Settings::instance().save();
+}
+
+void AppStateMachine::extractLobbyFromMenu()
+{
+    MenuState * ms = dynamic_cast<MenuState*>(m_currentState.get());
+    if (!ms) return;
+    MenuResult r = ms->getResult();
+    m_lobbyConfig.numHumans = r.numHumans;
+    m_lobbyConfig.numBots = r.numBots;
+    m_lobbyConfig.botDifficulty = r.botDifficulty;
+    m_lobbyConfig.vietRules = r.vietRules;
+    m_lobbyConfig.serverIp = r.serverIp;
+    m_lobbyConfig.port = r.port;
+    m_lobbyConfig.isLanServer = (r.action == 4);
+    m_lobbyConfig.isLanClient = (r.action == 5);
+}
+
+void AppStateMachine::extractGameOverFromPlaying()
+{
+    PlayingState * ps = dynamic_cast<PlayingState*>(m_currentState.get());
+    if (!ps) return;
+    m_gameOverInfo = ps->getGameOverInfo();
 }
 
 void AppStateMachine::transitionTo(AppStateId newId)
@@ -305,18 +409,13 @@ void AppStateMachine::createState(AppStateId id)
             m_currentState = std::make_unique<MenuState>(m_config);
             break;
         case AppStateId::LOBBY:
-        {
-            // Quick transition through lobby for now (inline config)
-            m_currentId = AppStateId::PLAYING_LOCAL;
-            createState(AppStateId::PLAYING_LOCAL);
+            m_currentState = std::make_unique<LobbyState>(m_config, m_lobbyConfig);
             break;
-        }
         case AppStateId::PLAYING_LOCAL:
             m_currentState = std::make_unique<PlayingState>(m_config, m_lobbyConfig);
             break;
         case AppStateId::GAME_OVER:
-            // Handled via PlayingState -> showGameOver
-            m_currentState = nullptr;
+            m_currentState = std::make_unique<GameOverState>(m_gameOverInfo);
             break;
         default:
             m_currentState = nullptr;

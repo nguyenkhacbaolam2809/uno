@@ -12,35 +12,35 @@
 
 class IBotStrategy;
 
-enum GamePhase
+enum class GamePhase
 {
-    PHASE_DEAL,
-    PHASE_PLAY,
-    PHASE_DRAW,
-    PHASE_JUMP_IN,
-    PHASE_GAME_OVER
+    Deal,
+    Play,
+    Draw,
+    JumpIn,
+    GameOver
 };
 
-enum JumpInState
+enum class JumpInState
 {
-    JUMP_NONE,
-    JUMP_AVAILABLE,
-    JUMP_TAKEN
+    None,
+    Available,
+    Taken
 };
 
-enum BotActionType
+enum class BotAction
 {
-    BOT_DRAW = -1,
-    BOT_PLAY_CARD = 0,
-    BOT_STACK_CARD = 1,
-    BOT_JUMP_IN = 2
+    Draw = -1,
+    PlayCard = 0,
+    StackCard = 1,
+    JumpIn = 2
 };
 
 struct BotActionResult
 {
-    int action;
+    BotAction action;
     int cardIdx;
-    COLOR chosenColor;
+    CardColor chosenColor;
 };
 
 struct GameState
@@ -51,7 +51,7 @@ struct GameState
     bool forceDraw;
     int drawStack;
     bool vietRules;
-    card currentCard;
+    Card currentCard;
     int winner;
     int playerCount;
     JumpInState jumpState;
@@ -69,28 +69,28 @@ public:
     void start();
     void reset();
 
-    GameState getState() const;
-    const GameConfig & getConfig() const;
-    bool isGameOver() const noexcept;
+    [[nodiscard]] GameState getState() const;
+    [[nodiscard]] const GameConfig & getConfig() const;
+    [[nodiscard]] bool isGameOver() const noexcept;
 
-    int getCurrentTurn() const noexcept;
-    int getDirection() const noexcept;
-    const card & getCurrentCard() const noexcept;
-    int getWinner() const noexcept;
-    int getDrawStack() const noexcept;
-    bool isForceDraw() const noexcept;
-    GamePhase getPhase() const noexcept;
+    [[nodiscard]] int getCurrentTurn() const noexcept;
+    [[nodiscard]] int getDirection() const noexcept;
+    [[nodiscard]] const Card & getCurrentCard() const noexcept;
+    [[nodiscard]] int getWinner() const noexcept;
+    [[nodiscard]] int getDrawStack() const noexcept;
+    [[nodiscard]] bool isForceDraw() const noexcept;
+    [[nodiscard]] GamePhase getPhase() const noexcept;
 
-    player * getPlayer(int idx) noexcept;
-    const player * getPlayer(int idx) const noexcept;
-    int getPlayerCount() const noexcept;
+    Player * getPlayer(int idx) noexcept;
+    const Player * getPlayer(int idx) const noexcept;
+    [[nodiscard]] int getPlayerCount() const noexcept;
 
     bool validatePlay(int playerIdx, int cardIdx) const;
-    bool playCard(int playerIdx, int cardIdx, const std::string & chosenColor);
+    bool playCard(int playerIdx, int cardIdx, CardColor chosenColor);
     void drawCard(int playerIdx);
     bool jumpIn(int playerIdx, int cardIdx);
     void callUno(int playerIdx);
-    void catchUno(int /*callerIdx*/, int targetIdx);
+    void catchUno(int callerIdx, int targetIdx);
 
     void nextTurn();
     void reshuffleDiscard();
@@ -102,18 +102,19 @@ private:
     GameConfig config;
     bool vietRules;
 
-    deck mainDeck;
-    deck discardPile;
-    std::vector<player> players;
+    Deck mainDeck;
+    Deck discardPile;
+    std::vector<Player> players;
     std::vector<std::unique_ptr<IBotStrategy>> botStrategies;
     int playerCount;
 
     GameState state;
+    std::vector<bool> m_unoCalled;
 
     void initDecks();
     void dealCards();
     void chooseRandomStarter();
-    void applyActionCard(const card & c);
+    void applyActionCard(const Card & c);
 };
 
 #endif

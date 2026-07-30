@@ -8,15 +8,15 @@ constexpr int BUFFER_SIZE = 4096;
 constexpr int MAX_CLIENTS = 4;
 constexpr int PROTOCOL_VERSION = 1;
 
-enum PacketType : unsigned char
+enum class PacketType : unsigned char
 {
-    PKT_HEARTBEAT,
-    PKT_PLAY_CARD,
-    PKT_DRAW,
-    PKT_JUMP_IN,
-    PKT_CALL_UNO,
-    PKT_CATCH_UNO,
-    PKT_SYNC_STATE
+    Heartbeat,
+    PlayCard,
+    Draw,
+    JumpIn,
+    CallUno,
+    CatchUno,
+    SyncState
 };
 
 struct PacketVersion
