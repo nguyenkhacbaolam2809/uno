@@ -43,6 +43,9 @@ void drawGameOverText(const std::string & winnerText)
 void GameView::renderOpponents(const GameEngine & engine, int localPlayerId)
 {
     int n = engine.getPlayerCount();
+    if (n <= 0 || localPlayerId < 0 || localPlayerId >= n)
+        return;
+
     int others = n - 1;
     if (others <= 0) return;
 
@@ -77,16 +80,19 @@ void GameView::renderOpponents(const GameEngine & engine, int localPlayerId)
 void GameView::renderTurnIndicator(const GameEngine & engine, int localPlayerId)
 {
     int n = engine.getPlayerCount();
+    if (n <= 0 || localPlayerId < 0 || localPlayerId >= n)
+        return;
+
     int current = engine.getCurrentTurn() % n;
 
     if (current == localPlayerId)
     {
-        Rectangle btn = { (float)(SCREEN_W / 2 - 50), (float)(SCREEN_H - 75), 100, 30 };
+        Rectangle btn = { (float)(SCREEN_W - 180), (float)(SCREEN_H - 75), 140, 40 };
         Color drawHover = { 200, 180, 0, 255 };
         Color drawNormal = { 180, 140, 20, 255 };
         DrawRectangleRounded(btn, 0.3f, 10, CheckCollisionPointRec(GetMousePosition(), btn) ? drawHover : drawNormal);
-        int dw = MeasureText("DRAW", 18);
-        DrawText("DRAW", (SCREEN_W - dw) / 2, SCREEN_H - 72, 18, WHITE);
+        int dw = MeasureText("DRAW CARD", 18);
+        DrawText("DRAW CARD", (int)(btn.x + (btn.width - dw) / 2), (int)(btn.y + 10), 18, WHITE);
 
         if (CheckCollisionPointRec(GetMousePosition(), btn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
             pendingResult.action = PlayerAction::DRAW_CARD;

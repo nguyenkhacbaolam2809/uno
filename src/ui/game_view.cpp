@@ -56,6 +56,10 @@ bool GameView::isReady() const noexcept
 void GameView::render(const GameEngine & engine, int localPlayerId)
 {
     renderBackground();
+    if (engine.getPlayerCount() <= 0 ||
+        localPlayerId < 0 || localPlayerId >= engine.getPlayerCount())
+        return;
+
     renderOpponents(engine, localPlayerId);
     renderPiles(engine);
     renderHand(engine, localPlayerId);
@@ -84,6 +88,9 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
     renderBackground();
 
     int n = (int)state.players.size();
+    if (n <= 0 || localPlayerId < 0 || localPlayerId >= n)
+        return;
+
     int slotW = 180, slotH = 80;
     int gap = 20;
     int totalW = (n - 1) * slotW + (n - 2) * gap;
@@ -193,15 +200,16 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
 
     if (isMyTurn)
     {
-        Rectangle btn = { (float)(SCREEN_W / 2 - 50), (float)(SCREEN_H - 75), 100, 30 };
+        Rectangle btn = { (float)(SCREEN_W - 180), (float)(SCREEN_H - 75), 140, 40 };
         Color drawBtnHover = { 200, 180, 0, 255 };
         Color drawBtnNormal = { 180, 140, 20, 255 };
         if (CheckCollisionPointRec(m, btn))
             DrawRectangleRounded(btn, 0.3f, 10, drawBtnHover);
         else
             DrawRectangleRounded(btn, 0.3f, 10, drawBtnNormal);
-        int tw4 = MeasureText("DRAW", 18);
-        DrawText("DRAW", (SCREEN_W - tw4) / 2, SCREEN_H - 72, 18, WHITE);
+        int tw4 = MeasureText("DRAW CARD", 18);
+        DrawText("DRAW CARD", (int)(btn.x + (btn.width - tw4) / 2),
+                 (int)(btn.y + 10), 18, WHITE);
         if (CheckCollisionPointRec(m, btn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
             pendingResult.action = PlayerAction::DRAW_CARD;
     }

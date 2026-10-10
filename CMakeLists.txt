@@ -49,6 +49,7 @@ endif()
 
 if(NOT WIN32)
     add_library(network
+        src/network/network_socket.cpp
         src/network/network_server.cpp
         src/network/network_client.cpp
     )

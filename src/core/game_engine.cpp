@@ -2,9 +2,10 @@
 #include "bot_factory.h"
 #include "rules.h"
 #include "rng.h"
+#include <algorithm>
 
 GameEngine::GameEngine(const GameConfig & cfg, bool viet)
-    : config(cfg)
+    : config(cfg), playerCount(0)
 {
     state.turn = 0;
     state.direction = 1;
@@ -16,12 +17,15 @@ GameEngine::GameEngine(const GameConfig & cfg, bool viet)
     state.playerCount = 0;
     state.jumpState = JumpInState::None;
     state.jumperId = -1;
+    m_finished.assign(playerCount, false);
+    m_finishOrder.clear();
 }
 
 GameEngine::~GameEngine() = default;
 
 void GameEngine::init(int numPlayers)
 {
+    numPlayers = std::clamp(numPlayers, 0, MAX_PLAYERS);
     botStrategies.clear();
     players.assign(numPlayers, Player());
     botStrategies.resize(numPlayers);
@@ -32,6 +36,8 @@ void GameEngine::init(int numPlayers)
     playerCount = numPlayers;
     state.playerCount = numPlayers;
     m_unoCalled.assign(numPlayers, false);
+    m_finished.assign(numPlayers, false);
+    m_finishOrder.clear();
 }
 
 int GameEngine::addPlayer(const std::string & name, PlayerType type, int difficulty)
@@ -86,6 +92,9 @@ void GameEngine::chooseRandomStarter()
 
 void GameEngine::start()
 {
+    if (playerCount <= 0)
+        return;
+
     state.phase = GamePhase::Deal;
     state.direction = 1;
     state.forceDraw = false;
@@ -93,6 +102,16 @@ void GameEngine::start()
     state.winner = -1;
     state.jumpState = JumpInState::None;
     state.jumperId = -1;
+    m_finished.assign(playerCount, false);
+    m_finishOrder.clear();
+
+    for (Player & player : players)
+    {
+        while (player.get_size() > 0)
+            player.hand_remove(0);
+    }
+    discardPile = Deck();
+    m_unoCalled.assign(playerCount, false);
 
     initDecks();
     dealCards();
@@ -135,25 +154,37 @@ void GameEngine::reset()
 
 GameState GameEngine::getState() const { return state; }
 const GameConfig & GameEngine::getConfig() const { return config; }
-bool GameEngine::isGameOver() const noexcept { return state.winner >= 0 || state.phase == GamePhase::GameOver; }
+bool GameEngine::isGameOver() const noexcept { return state.phase == GamePhase::GameOver; }
 int GameEngine::getCurrentTurn() const noexcept { return state.turn; }
 int GameEngine::getDirection() const noexcept { return state.direction; }
 const Card & GameEngine::getCurrentCard() const noexcept { return state.currentCard; }
 int GameEngine::getWinner() const noexcept { return state.winner; }
+const std::vector<int> & GameEngine::getFinishOrder() const noexcept { return m_finishOrder; }
 int GameEngine::getDrawStack() const noexcept { return state.drawStack; }
 bool GameEngine::isForceDraw() const noexcept { return state.forceDraw; }
 GamePhase GameEngine::getPhase() const noexcept { return state.phase; }
-Player * GameEngine::getPlayer(int idx) noexcept { return &players[idx]; }
-const Player * GameEngine::getPlayer(int idx) const noexcept { return &players[idx]; }
+Player * GameEngine::getPlayer(int idx) noexcept
+{
+    if (idx < 0 || idx >= playerCount) return nullptr;
+    return &players[idx];
+}
+
+const Player * GameEngine::getPlayer(int idx) const noexcept
+{
+    if (idx < 0 || idx >= playerCount) return nullptr;
+    return &players[idx];
+}
 int GameEngine::getPlayerCount() const noexcept { return playerCount; }
 
 bool GameEngine::validatePlay(int playerIdx, int cardIdx) const
 {
+    if (state.phase != GamePhase::Play || playerIdx != state.turn) return false;
     if (playerIdx < 0 || playerIdx >= playerCount) return false;
     if (cardIdx < 0 || cardIdx >= players[playerIdx].get_size()) return false;
 
     Card chosen = players[playerIdx].peek(cardIdx);
     if (!::canPlayCard(chosen, state.currentCard)) return false;
+    if (state.forceDraw && !::isStackCard(chosen)) return false;
     if (chosen.number == CARD_WILD_DRAW_FOUR && !::canPlayWildDrawFour(chosen, state.currentCard, players[playerIdx]))
         return false;
     if (state.vietRules && players[playerIdx].get_size() == 1 && !::isLegalLastCard(chosen))
@@ -163,11 +194,16 @@ bool GameEngine::validatePlay(int playerIdx, int cardIdx) const
 
 bool GameEngine::playCard(int playerIdx, int cardIdx, CardColor chosenColor)
 {
+    if (state.phase != GamePhase::Play || playerIdx != state.turn) return false;
     if (playerIdx < 0 || playerIdx >= playerCount) return false;
     if (cardIdx < 0 || cardIdx >= players[playerIdx].get_size()) return false;
 
     Card chosen = players[playerIdx].peek(cardIdx);
     if (!::canPlayCard(chosen, state.currentCard)) return false;
+    if (state.forceDraw && !::isStackCard(chosen)) return false;
+    if (chosen.color == CardColor::Wild &&
+        (chosenColor < CardColor::Red || chosenColor > CardColor::Yellow))
+        return false;
     if (chosen.number == CARD_WILD_DRAW_FOUR && !::canPlayWildDrawFour(chosen, state.currentCard, players[playerIdx]))
         return false;
 
@@ -195,8 +231,7 @@ bool GameEngine::playCard(int playerIdx, int cardIdx, CardColor chosenColor)
 
     if (players[playerIdx].get_size() == 0)
     {
-        state.winner = playerIdx;
-        state.phase = GamePhase::GameOver;
+        recordFinish(playerIdx);
         return true;
     }
 
@@ -278,8 +313,7 @@ bool GameEngine::jumpIn(int playerIdx, int cardIdx)
 
     if (players[playerIdx].get_size() == 0)
     {
-        state.winner = playerIdx;
-        state.phase = GamePhase::GameOver;
+        recordFinish(playerIdx);
         return true;
     }
 
@@ -340,6 +374,8 @@ void GameEngine::applyActionCard(const Card & c)
 
 void GameEngine::nextTurn()
 {
+    if (playerCount <= 0) return;
+
     if (state.jumpState == JumpInState::Taken && state.jumperId >= 0)
     {
         // Clear UNO flag for outgoing player if not at 1 card
@@ -355,9 +391,14 @@ void GameEngine::nextTurn()
         applyActionCard(state.currentCard);
 
         // Advance past the jumper (they already played in jumpIn())
-        state.turn = (state.turn + state.direction) % playerCount;
-        if (state.turn < 0)
-            state.turn += playerCount;
+        int next = state.turn;
+        for (int i = 0; i < playerCount; i++)
+        {
+            next = (next + state.direction) % playerCount;
+            if (next < 0) next += playerCount;
+            if (!m_finished[next]) break;
+        }
+        state.turn = next;
         return;
     }
 
@@ -366,9 +407,36 @@ void GameEngine::nextTurn()
         m_unoCalled[state.turn] = false;
 
     state.jumpState = JumpInState::None;
-    state.turn = (state.turn + state.direction) % playerCount;
-    if (state.turn < 0)
-        state.turn += playerCount;
+    int next = state.turn;
+    for (int i = 0; i < playerCount; i++)
+    {
+        next = (next + state.direction) % playerCount;
+        if (next < 0) next += playerCount;
+        if (!m_finished[next]) break;
+    }
+    state.turn = next;
+}
+
+void GameEngine::recordFinish(int playerIdx)
+{
+    if (playerIdx < 0 || playerIdx >= playerCount || m_finished[playerIdx])
+        return;
+
+    m_finished[playerIdx] = true;
+    m_finishOrder.push_back(playerIdx);
+    if (state.winner < 0)
+        state.winner = playerIdx;
+
+    if (countActivePlayers() <= 1)
+        state.phase = GamePhase::GameOver;
+}
+
+int GameEngine::countActivePlayers() const noexcept
+{
+    int active = 0;
+    for (bool finished : m_finished)
+        if (!finished) ++active;
+    return active;
 }
 
 BotActionResult GameEngine::executeBotTurn(int playerIdx)

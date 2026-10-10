@@ -137,6 +137,39 @@ MenuResult MenuView::runBlocking(MenuPhase phase)
 void MenuView::resetTo(const MenuPhase & phase)
 {
     m_phase = phase;
+    m_stringEditing = false;
+    m_editingIp = false;
+    m_editingPort = false;
+}
+
+bool MenuView::handleBackButton()
+{
+    if (m_phase == MenuPhase::Main)
+        return false;
+
+    Rectangle backRect = { 30.0f, static_cast<float>(SCREEN_H - 60), 140.0f, 40.0f };
+    if (IsKeyPressed(KEY_ESCAPE) ||
+        (CheckCollisionPointRec(GetMousePosition(), backRect) &&
+         IsMouseButtonPressed(MOUSE_LEFT_BUTTON)))
+    {
+        resetTo(MenuPhase::Main);
+        return true;
+    }
+    return false;
+}
+
+void MenuView::drawBackButton()
+{
+    Rectangle backRect = { 30.0f, static_cast<float>(SCREEN_H - 60), 140.0f, 40.0f };
+    Color color = CheckCollisionPointRec(GetMousePosition(), backRect)
+                    ? Color{ 110, 110, 120, 255 }
+                    : Color{ 80, 80, 90, 255 };
+    DrawRectangleRounded(backRect, 0.3f, 10, color);
+    DrawRectangleRoundedLines(backRect, 0.3f, 10, 2, Fade(WHITE, 0.3f));
+    int fontSize = 20;
+    int textWidth = MeasureText(msg(17), fontSize);
+    DrawText(msg(17), static_cast<int>(backRect.x + (backRect.width - textWidth) / 2),
+             static_cast<int>(backRect.y + 9), fontSize, WHITE);
 }
 
 // --- Step: one frame of input ---
@@ -219,6 +252,8 @@ void MenuView::drawMain()
 // ==================== DIFFICULTY SELECT ====================
 void MenuView::stepDifficulty()
 {
+    if (handleBackButton()) return;
+
     int bw = 260, bh = 44, gap = 12;
     int startY = 120;
 
@@ -234,8 +269,17 @@ void MenuView::stepDifficulty()
     for (int i = 0; i < 3; i++)
         if (drawButton(diffBtns[i])) m_diffChoice = i + 1;
 
-    // Name editing
-    if (IsKeyPressed(KEY_ENTER)) m_stringEditing = !m_stringEditing;
+    Rectangle nameRect = { (float)(SCREEN_W / 2 - 150), (float)(startY + 230), 300, 40 };
+    if (CheckCollisionPointRec(GetMousePosition(), nameRect) &&
+        IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+        m_stringEditing = true;
+    if (IsKeyPressed(KEY_ENTER))
+        m_stringEditing = !m_stringEditing;
+    if (IsKeyPressed(KEY_ESCAPE) && m_stringEditing)
+    {
+        m_stringEditing = false;
+        return;
+    }
     if (m_stringEditing)
     {
         int k = GetCharPressed();
@@ -329,11 +373,14 @@ void MenuView::drawDifficulty()
     Color startBtnColor = { 0, 155, 72, 255 };
     DrawRectangleRounded(startBtn, 0.3f, 10, startBtnColor);
     drawTextCentered(msg(18), startY + 445, 22, WHITE);
+    drawBackButton();
 }
 
 // ==================== LOCAL SETUP ====================
 void MenuView::stepLocalSetup()
 {
+    if (handleBackButton()) return;
+
     Rectangle minusRect = { (float)(SCREEN_W / 2 - 60), 170, 40, 40 };
     Rectangle plusRect = { (float)(SCREEN_W / 2 + 20), 170, 40, 40 };
 
@@ -385,11 +432,14 @@ void MenuView::drawLocalSetup()
     Color startBtnColor = { 0, 155, 72, 255 };
     DrawRectangleRounded(startBtn, 0.3f, 10, startBtnColor);
     drawTextCentered(msg(18), 315, 22, WHITE);
+    drawBackButton();
 }
 
 // ==================== MIXED SETUP ====================
 void MenuView::stepMixedSetup()
 {
+    if (handleBackButton()) return;
+
     Rectangle hMinus = { (float)(SCREEN_W / 2 - 100), 140, 30, 30 };
     Rectangle hPlus  = { (float)(SCREEN_W / 2 - 30), 140, 30, 30 };
     Rectangle bMinus = { (float)(SCREEN_W / 2 - 100), 220, 30, 30 };
@@ -487,11 +537,14 @@ void MenuView::drawMixedSetup()
     Color startBtnColor = { 0, 155, 72, 255 };
     DrawRectangleRounded(startBtn, 0.3f, 10, startBtnColor);
     drawTextCentered(msg(18), 495, 22, WHITE);
+    drawBackButton();
 }
 
 // ==================== LAN MENU ====================
 void MenuView::stepLan()
 {
+    if (handleBackButton()) return;
+
     int bw = 260, bh = 50, gap = 20;
     int bx = (SCREEN_W - bw) / 2;
     int by = 160;
@@ -523,8 +576,6 @@ void MenuView::stepLan()
     Rectangle ipRect = { (float)(SCREEN_W / 2 - 150), (float)(by + 170), 300, 36 };
     if (CheckCollisionPointRec(GetMousePosition(), ipRect) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
     { m_editingIp = true; m_editingPort = false; }
-    if (CheckCollisionPointRec(GetMousePosition(), ipRect) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-        m_editingIp = true;
 
     Rectangle portRect = { (float)(SCREEN_W / 2 - 150), (float)(by + 260), 300, 36 };
     if (CheckCollisionPointRec(GetMousePosition(), portRect) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
@@ -586,6 +637,7 @@ void MenuView::drawLan()
     DrawRectangleRounded(portRect, 0.3f, 10, portRectColor);
     if (m_editingPort) DrawRectangleRoundedLines(portRect, 0.3f, 10, 2, GOLD_COLOR);
     DrawText(m_portBuf, (int)portRect.x + 10, (int)portRect.y + 6, 20, WHITE);
+    drawBackButton();
 }
 
 // ==================== COLOR PICKER ====================

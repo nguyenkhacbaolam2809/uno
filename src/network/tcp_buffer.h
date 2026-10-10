@@ -44,7 +44,15 @@ public:
 
     bool hasPacket() const
     {
-        return (writePos - readPos) >= 4;
+        const size_t available = writePos - readPos;
+        if (available < sizeof(uint32_t))
+            return false;
+
+        uint32_t totalLen;
+        std::memcpy(&totalLen, data.data() + readPos, sizeof(totalLen));
+        if (totalLen < 8 || totalLen > 65536)
+            return true;
+        return available >= totalLen;
     }
 
     Packet readPacket()
@@ -54,12 +62,17 @@ public:
         pkt.playerId = 0;
         pkt.length = 0;
 
-        if ((writePos - readPos) < 4)
+        if ((writePos - readPos) < sizeof(uint32_t))
             return pkt;
 
         uint32_t totalLen;
         std::memcpy(&totalLen, data.data() + readPos, 4);
-        if (totalLen < 4 || totalLen > 65536 || (writePos - readPos) < totalLen)
+        if (totalLen < 8 || totalLen > 65536)
+        {
+            readPos += sizeof(uint32_t);
+            return pkt;
+        }
+        if ((writePos - readPos) < totalLen)
             return pkt;
 
         int bodyOffset = readPos + 4;
@@ -75,12 +88,10 @@ public:
             pkt.length = 4 + bLen;
 
             if (bodyMaxLen >= 4 + bLen)
-            {
                 pkt.body.assign(bodyStart + 4, bodyStart + 4 + bLen);
-                readPos += totalLen;
-            }
         }
 
+        readPos += totalLen;
         return pkt;
     }
 

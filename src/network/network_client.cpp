@@ -50,7 +50,7 @@ void NetworkClient::disconnect()
 bool NetworkClient::sendPacket(unsigned char type, unsigned char playerId,
                                 const void * body, int bodyLen)
 {
-    if (!connected || !m_sock) return false;
+    if (!connected || !m_sock || bodyLen < 0 || bodyLen > UINT16_MAX) return false;
 
     uint32_t totalLen = 4 + 4 + bodyLen;
     std::vector<char> pkt(totalLen);
@@ -147,36 +147,38 @@ bool NetworkClient::receiveSyncState(SyncState & state, int timeoutMs)
     int bodyLen = (int)pkt.body.size();
     int offset = 0;
 
-    if (bodyLen < (int)sizeof(int)) return false;
-    std::memcpy(&state.myPlayerId, body + offset, sizeof(int));
-    offset += sizeof(int);
+    auto readInt = [&](int & value) {
+        if (bodyLen - offset < static_cast<int>(sizeof(value)))
+            return false;
+        std::memcpy(&value, body + offset, sizeof(value));
+        offset += static_cast<int>(sizeof(value));
+        return true;
+    };
 
-    if (bodyLen - offset < (int)sizeof(GameState)) return false;
+    if (!readInt(state.myPlayerId) ||
+        bodyLen - offset < static_cast<int>(sizeof(GameState)))
+        return false;
     std::memcpy(&state.gs, body + offset, sizeof(GameState));
     offset += sizeof(GameState);
 
     int pCount;
-    std::memcpy(&pCount, body + offset, sizeof(int));
-    offset += sizeof(int);
+    if (!readInt(pCount) || pCount < 0 || pCount > MAX_PLAYERS)
+        return false;
 
     state.players.clear();
     for (int i = 0; i < pCount; i++)
     {
         SyncPlayer sp;
         int nameLen;
-        std::memcpy(&nameLen, body + offset, sizeof(int));
-        offset += sizeof(int);
-        if (offset + nameLen > bodyLen) return false;
+        if (!readInt(nameLen) || nameLen < 0 || nameLen > bodyLen - offset)
+            return false;
         sp.name = std::string(body + offset, nameLen);
         offset += nameLen;
 
         int cardCount, pType, pDiff;
-        std::memcpy(&cardCount, body + offset, sizeof(int));
-        offset += sizeof(int);
-        std::memcpy(&pType, body + offset, sizeof(int));
-        offset += sizeof(int);
-        std::memcpy(&pDiff, body + offset, sizeof(int));
-        offset += sizeof(int);
+        if (!readInt(cardCount) || !readInt(pType) || !readInt(pDiff) ||
+            cardCount < 0 || cardCount > DECK_SIZE)
+            return false;
 
         sp.type = static_cast<PlayerType>(pType);
         sp.difficulty = static_cast<BotDifficulty>(pDiff);

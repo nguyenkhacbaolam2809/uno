@@ -8,6 +8,11 @@
 #include "bot_medium.h"
 #include "bot_easy.h"
 #include "bot_factory.h"
+#ifndef _WIN32
+#include "tcp_buffer.h"
+#include <sys/socket.h>
+#include <unistd.h>
+#endif
 #include <iostream>
 #include <cstdlib>
 #include <cassert>
@@ -208,6 +213,148 @@ void testGameEngine()
     vnEngine.start();
     TEST("viet rules engine starts", vnEngine.getPhase() == GamePhase::Play);
 }
+
+void testGameEngineBoundaryCases()
+{
+    GameConfig cfg;
+    cfg.lang = Language::English;
+
+    {
+        GameEngine engine(cfg, false);
+        engine.init(-1);
+        TEST("negative player count is rejected safely", engine.getPlayerCount() == 0);
+        TEST("invalid player lookup returns null", engine.getPlayer(-1) == nullptr);
+        TEST("invalid const player lookup returns null",
+             static_cast<const GameEngine &>(engine).getPlayer(0) == nullptr);
+    }
+
+    {
+        GameEngine engine(cfg, false);
+        engine.init(4);
+        engine.addPlayer("P0", PlayerType::Human, 0);
+        engine.addPlayer("P1", PlayerType::Human, 0);
+        engine.addPlayer("P2", PlayerType::Bot, static_cast<int>(BotDifficulty::Easy));
+        engine.addPlayer("P3", PlayerType::Human, 0);
+        engine.start();
+
+        const int first = engine.getCurrentTurn();
+        Player * firstPlayer = engine.getPlayer(first);
+        while (firstPlayer->get_size() > 0)
+            firstPlayer->hand_remove(0);
+        firstPlayer->hand_add(Card(5, engine.getCurrentCard().color));
+        TEST("first finisher is recorded without ending four-player game",
+             engine.playCard(first, 0, CardColor::Red) &&
+             !engine.isGameOver());
+        TEST("first finisher appears in ranking", engine.getFinishOrder().size() == 1 &&
+             engine.getFinishOrder()[0] == first);
+        engine.nextTurn();
+        TEST("turn skips the player who already finished",
+             engine.getCurrentTurn() != first);
+    }
+
+    {
+        GameEngine engine(cfg, false);
+        engine.init(3);
+        engine.addPlayer("P0", PlayerType::Human, 0);
+        engine.addPlayer("P1", PlayerType::Bot, static_cast<int>(BotDifficulty::Easy));
+        engine.addPlayer("P2", PlayerType::Human, 0);
+        engine.start();
+
+        for (int finish = 0; finish < 2; ++finish)
+        {
+            const int current = engine.getCurrentTurn();
+            Player * player = engine.getPlayer(current);
+            while (player->get_size() > 0)
+                player->hand_remove(0);
+            player->hand_add(Card(6, engine.getCurrentCard().color));
+            TEST("finisher can be recorded during ranking round",
+                 engine.playCard(current, 0, CardColor::Red));
+            if (finish == 0)
+                engine.nextTurn();
+        }
+
+        TEST("game ends when only one player remains",
+             engine.isGameOver() && engine.getFinishOrder().size() == 2);
+    }
+
+    {
+        GameEngine engine(cfg, false);
+        engine.init(2);
+        engine.addPlayer("P0", PlayerType::Human, 0);
+        engine.addPlayer("P1", PlayerType::Human, 0);
+        engine.start();
+
+        const int current = engine.getCurrentTurn();
+        const int other = (current + 1) % 2;
+        Player * otherPlayer = engine.getPlayer(other);
+        while (otherPlayer->get_size() > 0)
+            otherPlayer->hand_remove(0);
+        otherPlayer->hand_add(Card(5, engine.getCurrentCard().color));
+
+        TEST("out-of-turn player cannot play", !engine.playCard(other, 0, CardColor::Red));
+        TEST("out-of-turn hand is unchanged", otherPlayer->get_size() == 1);
+    }
+
+    {
+        GameEngine engine(cfg, false);
+        engine.init(2);
+        engine.addPlayer("P0", PlayerType::Human, 0);
+        engine.addPlayer("P1", PlayerType::Human, 0);
+        engine.start();
+        const int current = engine.getCurrentTurn();
+        Player * player = engine.getPlayer(current);
+        while (player->get_size() > 0)
+            player->hand_remove(0);
+        player->hand_add(Card(CARD_WILD, CardColor::Wild));
+        TEST("wild card rejects an unchosen wild color",
+             !engine.playCard(current, 0, CardColor::Wild));
+    }
+
+    {
+        GameEngine engine(cfg, false);
+        engine.init(2);
+        engine.addPlayer("P0", PlayerType::Human, 0);
+        engine.addPlayer("P1", PlayerType::Human, 0);
+        engine.start();
+        engine.start();
+
+        TEST("restarting engine redeals seven cards", engine.getPlayer(0)->get_size() == HAND_SIZE);
+        TEST("restarting engine redeals all players", engine.getPlayer(1)->get_size() == HAND_SIZE);
+    }
+}
+
+void testBotBoundaryCases()
+{
+    Player bot("Solo", PlayerType::Bot, BotDifficulty::Hard);
+    bot.hand_add(Card(5, CardColor::Red));
+
+    HardBotStrategy hard;
+    const Card current(5, CardColor::Red);
+    const int action = hard.pickCard(&bot, current, 1, 0, nullptr, 0, 0);
+    TEST("hard bot handles no opponents", action == 0);
+}
+
+#ifndef _WIN32
+void testTcpBufferMalformedFrames()
+{
+    int sockets[2] = {-1, -1};
+    TEST("socket pair created", socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
+    if (sockets[0] < 0)
+        return;
+
+    uint32_t invalidLength = 3;
+    write(sockets[0], &invalidLength, sizeof(invalidLength));
+
+    RecvBuffer buffer;
+    TEST("buffer reads malformed frame", buffer.fill(sockets[1]) == sizeof(invalidLength));
+    TEST("malformed frame is available", buffer.hasPacket());
+    buffer.readPacket();
+    TEST("malformed frame is discarded", !buffer.hasPacket());
+
+    close(sockets[0]);
+    close(sockets[1]);
+}
+#endif
 
 void testBot()
 {
@@ -762,13 +909,19 @@ int main()
 
     std::cout << std::endl << "--- Game Engine Tests ---" << std::endl;
     testGameEngine();
+    testGameEngineBoundaryCases();
     testActionCards();
     testDrawStackingAndForceDraw();
     testVietnameseRulesComprehensive();
 
     std::cout << std::endl << "--- Bot AI Tests ---" << std::endl;
     testBot();
+    testBotBoundaryCases();
     testBotAIStrategiesComprehensive();
+#ifndef _WIN32
+    std::cout << std::endl << "--- Network Buffer Tests ---" << std::endl;
+    testTcpBufferMalformedFrames();
+#endif
 
     std::cout << std::endl << "=== Results ===" << std::endl;
     std::cout << "Passed: " << testsPassed << std::endl;

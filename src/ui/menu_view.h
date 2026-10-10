@@ -96,6 +96,8 @@ private:
     bool drawButton(Button & btn);
     void drawTextCentered(const char * text, int y, int fontSize, Color color);
     const char * msg(int id) const;
+    bool handleBackButton();
+    void drawBackButton();
 };
 
 #endif

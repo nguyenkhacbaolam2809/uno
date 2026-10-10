@@ -75,7 +75,7 @@ void PlayingState::enter()
         {
             if (i == 0)
             {
-                name = "Player";
+                name = m_lobby.playerName.empty() ? "Player" : m_lobby.playerName;
                 type = PlayerType::Human;
             }
             else
@@ -135,6 +135,7 @@ static SoundId cardSound(const Card & c)
 void PlayingState::processTurnLocal()
 {
     int n = m_engine.getPlayerCount();
+    if (n <= 0) return;
     int currentTurn = m_engine.getCurrentTurn() % n;
     const Player * p = m_engine.getPlayer(currentTurn);
 
@@ -147,12 +148,7 @@ void PlayingState::processTurnLocal()
             botTimer = now + 0.5;
 
         if (now < botTimer)
-        {
-            BeginDrawing();
-            m_gameView->render(m_engine, m_localPlayerId);
-            EndDrawing();
             return;
-        }
 
         botTimer = 0.0;
 
@@ -196,57 +192,36 @@ void PlayingState::processTurnLocal()
     }
     else
     {
-        m_gameView->resetInteraction();
-        bool turnDone = false;
-        bool drewCard = false;
-
-        while (!turnDone && !m_engine.isGameOver())
+        InteractionResult r = m_gameView->getInteraction();
+        if (r.action == PlayerAction::PLAY_CARD)
         {
-            if (WindowShouldClose()) return;
-            BeginDrawing();
-            m_gameView->render(m_engine, m_localPlayerId);
-
-            InteractionResult r = m_gameView->getInteraction();
-            if (r.action == PlayerAction::PLAY_CARD)
+            if (m_engine.validatePlay(m_localPlayerId, r.cardIndex))
             {
-                if (m_engine.validatePlay(m_localPlayerId, r.cardIndex))
+                Card c = m_engine.getPlayer(m_localPlayerId)->peek(r.cardIndex);
+                AudioManager::instance().playSound(cardSound(c));
+                if (m_engine.playCard(m_localPlayerId, r.cardIndex, r.chosenColor))
                 {
-                    Card c = m_engine.getPlayer(m_localPlayerId)->peek(r.cardIndex);
-                    AudioManager::instance().playSound(cardSound(c));
-                    if (m_engine.playCard(m_localPlayerId, r.cardIndex, r.chosenColor))
-                    {
-                        drewCard = false;
-                        m_engine.nextTurn();
-                        turnDone = true;
-                    }
+                    m_engine.nextTurn();
                 }
             }
-            else if (r.action == PlayerAction::DRAW_CARD)
-            {
-                if (!drewCard)
-                {
-                    AudioManager::instance().playSound(SoundId::CARD_DRAW);
-                    drewCard = true;
-                }
-                m_engine.drawCard(m_localPlayerId);
-                m_engine.nextTurn();
-                turnDone = true;
-            }
-            else if (r.action == PlayerAction::SAY_UNO)
-            {
-                AudioManager::instance().playSound(SoundId::UNO_BUTTON);
-                m_engine.callUno(m_localPlayerId);
-            }
-            else if (r.action == PlayerAction::CATCH_UNO)
-            {
-                AudioManager::instance().playSound(SoundId::CATCH_UNO);
-                m_engine.catchUno(m_localPlayerId, r.targetId);
-            }
-
-            EndDrawing();
+        }
+        else if (r.action == PlayerAction::DRAW_CARD)
+        {
+            AudioManager::instance().playSound(SoundId::CARD_DRAW);
+            m_engine.drawCard(m_localPlayerId);
+            m_engine.nextTurn();
+        }
+        else if (r.action == PlayerAction::SAY_UNO)
+        {
+            AudioManager::instance().playSound(SoundId::UNO_BUTTON);
+            m_engine.callUno(m_localPlayerId);
+        }
+        else if (r.action == PlayerAction::CATCH_UNO)
+        {
+            AudioManager::instance().playSound(SoundId::CATCH_UNO);
+            m_engine.catchUno(m_localPlayerId, r.targetId);
         }
     }
-
 }
 
 // --- GameOverState ---
@@ -266,7 +241,15 @@ void GameOverState::enter()
 AppStateId GameOverState::update()
 {
     if (WindowShouldClose()) return AppStateId::EXIT;
-    if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE) || IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+    Rectangle menuButton = {
+        uno::SCREEN_W / 2.0f - 110.0f,
+        uno::SCREEN_H / 2.0f + 60.0f,
+        220.0f,
+        48.0f
+    };
+    if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE) ||
+        (CheckCollisionPointRec(GetMousePosition(), menuButton) &&
+         IsMouseButtonPressed(MOUSE_LEFT_BUTTON)))
         return AppStateId::MENU;
     return AppStateId::GAME_OVER;
 }
@@ -288,6 +271,23 @@ void GameOverState::render()
     const char * sub = "Press ENTER or click to continue";
     int sw = MeasureText(sub, 20);
     DrawText(sub, (uno::SCREEN_W - sw) / 2, uno::SCREEN_H / 2 + 20, 20, Fade(WHITE, 0.7f));
+
+    Rectangle menuButton = {
+        uno::SCREEN_W / 2.0f - 110.0f,
+        uno::SCREEN_H / 2.0f + 60.0f,
+        220.0f,
+        48.0f
+    };
+    Color buttonColor = CheckCollisionPointRec(GetMousePosition(), menuButton)
+                          ? Color{ 110, 110, 120, 255 }
+                          : Color{ 80, 80, 90, 255 };
+    DrawRectangleRounded(menuButton, 0.3f, 10, buttonColor);
+    DrawRectangleRoundedLines(menuButton, 0.3f, 10, 2, Fade(WHITE, 0.3f));
+    const char * buttonText = "Back to menu";
+    int buttonWidth = MeasureText(buttonText, 20);
+    DrawText(buttonText,
+             static_cast<int>(menuButton.x + (menuButton.width - buttonWidth) / 2),
+             static_cast<int>(menuButton.y + 13), 20, WHITE);
 
     ParticleSystem::instance().update(GetFrameTime());
     ParticleSystem::instance().render();
@@ -405,6 +405,7 @@ void AppStateMachine::extractLobbyFromMenu()
     m_lobbyConfig.vietRules = r.vietRules;
     m_lobbyConfig.serverIp = r.serverIp;
     m_lobbyConfig.port = r.port;
+    m_lobbyConfig.playerName = r.playerName.empty() ? "Player" : r.playerName;
     m_lobbyConfig.isLanServer = (r.action == 4);
     m_lobbyConfig.isLanClient = (r.action == 5);
 }

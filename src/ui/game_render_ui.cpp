@@ -16,6 +16,9 @@ using uno::GOLD_COLOR;
 void GameView::renderUnoButton(const GameEngine & engine, int localPlayerId)
 {
     int n = engine.getPlayerCount();
+    if (n <= 0 || localPlayerId < 0 || localPlayerId >= n)
+        return;
+
     int current = engine.getCurrentTurn() % n;
     const Player * p = engine.getPlayer(localPlayerId);
     int handSize = p->get_size();
@@ -42,6 +45,9 @@ void GameView::renderUnoButton(const GameEngine & engine, int localPlayerId)
 void GameView::renderCatchTargets(const GameEngine & engine, int localPlayerId)
 {
     int n = engine.getPlayerCount();
+    if (n <= 0 || localPlayerId < 0 || localPlayerId >= n)
+        return;
+
     vulnerableOpponent = -1;
 
     for (int i = 0; i < n; i++)
@@ -146,6 +152,9 @@ void GameView::handleHandClick(const GameEngine & engine, int localPlayerId)
     if (!IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) return;
 
     int n = engine.getPlayerCount();
+    if (n <= 0 || localPlayerId < 0 || localPlayerId >= n)
+        return;
+
     bool isMyTurn = (engine.getCurrentTurn() % n) == localPlayerId;
     if (!isMyTurn) return;
 
@@ -188,6 +197,9 @@ void GameView::handleUnoCatchClick(const GameEngine & engine, int localPlayerId)
     if (vulnerableOpponent >= 0)
     {
         int n = engine.getPlayerCount();
+        if (n <= 0 || localPlayerId < 0 || localPlayerId >= n)
+            return;
+
         int slotW = 180, slotH = 80;
         int gap = 20;
         int others = n - 1;
@@ -215,5 +227,4 @@ void GameView::handleUnoCatchClick(const GameEngine & engine, int localPlayerId)
         }
     }
 }
-
 

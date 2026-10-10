@@ -77,6 +77,7 @@ public:
     [[nodiscard]] int getDirection() const noexcept;
     [[nodiscard]] const Card & getCurrentCard() const noexcept;
     [[nodiscard]] int getWinner() const noexcept;
+    [[nodiscard]] const std::vector<int> & getFinishOrder() const noexcept;
     [[nodiscard]] int getDrawStack() const noexcept;
     [[nodiscard]] bool isForceDraw() const noexcept;
     [[nodiscard]] GamePhase getPhase() const noexcept;
@@ -109,11 +110,15 @@ private:
 
     GameState state;
     std::vector<bool> m_unoCalled;
+    std::vector<bool> m_finished;
+    std::vector<int> m_finishOrder;
 
     void initDecks();
     void dealCards();
     void chooseRandomStarter();
     void applyActionCard(const Card & c);
+    void recordFinish(int playerIdx);
+    int countActivePlayers() const noexcept;
 };
 
 #endif

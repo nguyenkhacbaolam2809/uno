@@ -50,6 +50,7 @@ struct LobbyConfig {
     bool isLanClient{false};
     std::string serverIp{"127.0.0.1"};
     int port{8888};
+    std::string playerName{"Player"};
 };
 
 struct GameOverInfo {

@@ -11,6 +11,10 @@ using uno::GOLD_COLOR;
 
 void GameView::renderHand(const GameEngine & engine, int localPlayerId)
 {
+    if (engine.getPlayerCount() <= 0 ||
+        localPlayerId < 0 || localPlayerId >= engine.getPlayerCount())
+        return;
+
     const Player * p = engine.getPlayer(localPlayerId);
     int handSize = p->get_size();
     if (handSize == 0) return;
@@ -62,6 +66,10 @@ Rectangle GameView::getCardRect(int index, int total) const
 
 int GameView::cardAtPos(Vector2 mouse, const GameEngine & engine, int localPlayerId) const
 {
+    if (engine.getPlayerCount() <= 0 ||
+        localPlayerId < 0 || localPlayerId >= engine.getPlayerCount())
+        return -1;
+
     const Player * p = engine.getPlayer(localPlayerId);
     int handSize = p->get_size();
     for (int i = 0; i < handSize; i++)
