@@ -4,7 +4,7 @@
 #include <cstdint>
 
 constexpr int DEFAULT_PORT = 8888;
-constexpr int BUFFER_SIZE = 4096;
+constexpr int PACKET_BUFFER_SIZE = 4096;
 constexpr int MAX_CLIENTS = 4;
 constexpr int PROTOCOL_VERSION = 1;
 

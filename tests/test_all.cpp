@@ -9,6 +9,7 @@
 #include "bot_easy.h"
 #include "bot_factory.h"
 #ifndef _WIN32
+#include "packets.h"
 #include "tcp_buffer.h"
 #include <sys/socket.h>
 #include <unistd.h>
@@ -335,6 +336,11 @@ void testBotBoundaryCases()
 }
 
 #ifndef _WIN32
+void testNetworkPacketConstants()
+{
+    TEST("packet buffer size is positive", PACKET_BUFFER_SIZE > 0);
+}
+
 void testTcpBufferMalformedFrames()
 {
     int sockets[2] = {-1, -1};
@@ -920,6 +926,7 @@ int main()
     testBotAIStrategiesComprehensive();
 #ifndef _WIN32
     std::cout << std::endl << "--- Network Buffer Tests ---" << std::endl;
+    testNetworkPacketConstants();
     testTcpBufferMalformedFrames();
 #endif
 
