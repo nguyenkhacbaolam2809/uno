@@ -249,7 +249,18 @@ int runConsoleMode(const GameConfig & cfg)
                 if (c.color == CardColor::Wild)
                     std::cout << " (chosen " << colorName(act.chosenColor) << ")";
                 std::cout << std::endl;
-                engine.playCard(currentTurn, act.cardIdx, act.chosenColor);
+
+                if (p->get_size() == 2)
+                {
+                    engine.callUno(currentTurn);
+                    std::cout << p->getName() << " calls UNO!" << std::endl;
+                }
+
+                if (!engine.playCard(currentTurn, act.cardIdx, act.chosenColor))
+                {
+                    engine.drawCard(currentTurn);
+                    std::cout << p->getName() << " draws a card." << std::endl;
+                }
             }
             else
             {
@@ -286,16 +297,8 @@ int runConsoleMode(const GameConfig & cfg)
                     {
                         engine.drawCard(localPlayerId);
                         drewCard = true;
-                        if (!engine.isForceDraw())
-                        {
-                            engine.nextTurn();
-                            turnDone = true;
-                        }
-                        else
-                        {
-                            engine.nextTurn();
-                            turnDone = true;
-                        }
+                        engine.nextTurn();
+                        turnDone = true;
                     }
                     else
                     {
@@ -319,10 +322,16 @@ int runConsoleMode(const GameConfig & cfg)
                         CardColor col = chosen.color;
                         if (col == CardColor::Wild)
                             col = chooseColor();
-                        engine.playCard(localPlayerId, cardIdx, col);
-                        turnDone = true;
-                        drewCard = false;
-                        engine.nextTurn();
+                        if (engine.playCard(localPlayerId, cardIdx, col))
+                        {
+                            turnDone = true;
+                            drewCard = false;
+                            engine.nextTurn();
+                        }
+                        else
+                        {
+                            std::cout << "Cannot play that card!" << std::endl;
+                        }
                     }
                     else
                     {

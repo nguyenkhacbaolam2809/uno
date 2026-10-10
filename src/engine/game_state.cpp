@@ -12,6 +12,7 @@
 #include "animation_manager.h"
 #include "particle_system.h"
 #include "settings.h"
+#include "rng.h"
 #include <cstdlib>
 
 // --- MenuState ---
@@ -164,13 +165,33 @@ void PlayingState::processTurnLocal()
         }
         else
         {
-            if (act.action == BotAction::PlayCard)
+            if (act.action == BotAction::PlayCard || act.action == BotAction::StackCard)
             {
                 Card c = p->peek(act.cardIdx);
                 AudioManager::instance().playSound(cardSound(c));
+
+                if (p->get_size() == 2)
+                {
+                    bool willCall = true;
+                    if (p->getDifficulty() == BotDifficulty::Easy)
+                        willCall = (randomInt(0, 1) == 0);
+                    else if (p->getDifficulty() == BotDifficulty::Normal)
+                        willCall = (randomInt(0, 4) != 0);
+
+                    if (willCall)
+                        m_engine.callUno(currentTurn);
+                }
             }
-            m_engine.playCard(currentTurn, act.cardIdx, act.chosenColor);
-            m_engine.nextTurn();
+
+            if (m_engine.playCard(currentTurn, act.cardIdx, act.chosenColor))
+            {
+                m_engine.nextTurn();
+            }
+            else
+            {
+                m_engine.drawCard(currentTurn);
+                m_engine.nextTurn();
+            }
         }
     }
     else
@@ -192,10 +213,12 @@ void PlayingState::processTurnLocal()
                 {
                     Card c = m_engine.getPlayer(m_localPlayerId)->peek(r.cardIndex);
                     AudioManager::instance().playSound(cardSound(c));
-                    m_engine.playCard(m_localPlayerId, r.cardIndex, r.chosenColor);
-                    drewCard = false;
-                    m_engine.nextTurn();
-                    turnDone = true;
+                    if (m_engine.playCard(m_localPlayerId, r.cardIndex, r.chosenColor))
+                    {
+                        drewCard = false;
+                        m_engine.nextTurn();
+                        turnDone = true;
+                    }
                 }
             }
             else if (r.action == PlayerAction::DRAW_CARD)

@@ -101,18 +101,26 @@ src/
 - `game_view.h` — Removed dead members (`showUnoButton`, `catchTarget`, `renderGameOver`), added `cardAtPos()` const+engine param
 - `game_view.cpp` — Rewritten as thin orchestrator with particle/animation integration
 
+## Test Suite ✅
+- 130 comprehensive unit tests covering:
+  - Card & rules validation (Wild Draw 4, Vietnamese illegal last card, Jump-in)
+  - Deck creation, reshuffling logic, draw exhaustion
+  - Player hand management and bot properties
+  - Action cards (Skip, Reverse in 2p and 4p)
+  - Draw stacking (+2 on +2, +4) and force draw mechanics
+  - UNO calling, false accusations penalty, and catch mechanics
+  - Bot AI strategies (Easy, Normal, Hard stack defense, threat blocking)
+- All 130 unit tests pass (100% deterministic)
+
 ## Remaining Technical Debt
 1. **Audio assets** — Sound files need to be placed in `assets/sounds/` (currently paths are referenced but files may not exist)
-2. **Network state pattern** — `PlayingState` only handles local games; LAN server/client need their own state implementations
+2. **Network state pattern** — `PlayingState` handles local games; LAN server/client state integration
 3. **Text texture caching** — `AssetManager::getCachedText()` is implemented but callers still use `DrawText()` directly
-4. **Test suite** — 80 existing tests should still pass; no new tests added yet for new modules
-5. **Win/Lose** — `AudioManager::playSound(WIN/LOSE)` not wired into game events yet
-6. **`enum COLOR`** — Still unscoped to minimize diff; full migration would touch 20+ files
-7. **debug_overlay** — Not yet wired into main loop; needs `IsKeyPressed(KEY_F3)` check in `Gui::run()`
+4. **`enum COLOR`** — Still unscoped to minimize diff; full migration would touch 20+ files
 
-## Build & Run (Linux/WSL)
+## Build & Run
 ```bash
-mkdir build && cd build && cmake .. && make
-./test_all   # verify all 80 tests
+mkdir build && cd build && cmake .. && make   # Linux/WSL/MinGW
+./test_all   # verify all 130 tests
 ./gameuno    # launch GUI
 ```

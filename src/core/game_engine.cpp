@@ -68,9 +68,10 @@ void GameEngine::chooseRandomStarter()
     while (maxAttempts > 0)
     {
         Card c = mainDeck.draw();
-        if (c.color != CardColor::Wild)
+        if (c.color != CardColor::Wild && !isActionCard(c))
         {
             state.currentCard = c;
+            discardPile.add_card(c);
             state.turn = randomInt(0, playerCount - 1);
             return;
         }
@@ -79,12 +80,20 @@ void GameEngine::chooseRandomStarter()
     }
 
     state.currentCard = mainDeck.draw();
+    discardPile.add_card(state.currentCard);
     state.turn = 0;
 }
 
 void GameEngine::start()
 {
     state.phase = GamePhase::Deal;
+    state.direction = 1;
+    state.forceDraw = false;
+    state.drawStack = 0;
+    state.winner = -1;
+    state.jumpState = JumpInState::None;
+    state.jumperId = -1;
+
     initDecks();
     dealCards();
     chooseRandomStarter();
@@ -93,9 +102,13 @@ void GameEngine::start()
     if (isActionCard(state.currentCard))
         applyActionCard(state.currentCard);
 
-    state.winner = -1;
-    state.jumpState = JumpInState::None;
-    state.jumperId = -1;
+    // If the starting card is a stack card (Draw2/WD4),
+    // the first player must draw penalty cards on their turn.
+    if (isStackCard(state.currentCard))
+    {
+        state.drawStack = getStackValue(state.currentCard);
+        state.forceDraw = true;
+    }
 }
 
 void GameEngine::reset()
@@ -143,6 +156,8 @@ bool GameEngine::validatePlay(int playerIdx, int cardIdx) const
     if (!::canPlayCard(chosen, state.currentCard)) return false;
     if (chosen.number == CARD_WILD_DRAW_FOUR && !::canPlayWildDrawFour(chosen, state.currentCard, players[playerIdx]))
         return false;
+    if (state.vietRules && players[playerIdx].get_size() == 1 && !::isLegalLastCard(chosen))
+        return false;
     return true;
 }
 
@@ -160,6 +175,8 @@ bool GameEngine::playCard(int playerIdx, int cardIdx, CardColor chosenColor)
         return false;
 
     players[playerIdx].hand_remove(cardIdx);
+    if (players[playerIdx].get_size() > 1)
+        m_unoCalled[playerIdx] = false;
 
     if (chosen.color == CardColor::Wild)
         chosen.color = chosenColor;
@@ -191,6 +208,7 @@ bool GameEngine::playCard(int playerIdx, int cardIdx, CardColor chosenColor)
 void GameEngine::drawCard(int playerIdx)
 {
     if (playerIdx < 0 || playerIdx >= playerCount) return;
+    m_unoCalled[playerIdx] = false;
 
     if (state.forceDraw)
     {
@@ -225,10 +243,12 @@ void GameEngine::reshuffleDiscard()
     for (int i = 0; i < n; i++)
         tmp.push_back(discardPile.draw());
 
-    for (int i = 0; i < n - 1; i++)
+    // tmp[0] is the top of discard (most recent = current card).
+    // Keep it as currentCard, shuffle the rest into mainDeck.
+    state.currentCard = tmp[0];
+    for (int i = 1; i < n; i++)
         mainDeck.add_card(tmp[i]);
 
-    state.currentCard = tmp[n - 1];
     discardPile.add_card(state.currentCard);
     mainDeck.quick_shuffle();
 }
@@ -242,6 +262,7 @@ bool GameEngine::jumpIn(int playerIdx, int cardIdx)
 
     Card chosen = players[playerIdx].peek(cardIdx);
     if (!::canJumpIn(chosen, state.currentCard)) return false;
+    if (players[playerIdx].get_size() == 1 && !::isLegalLastCard(chosen)) return false;
 
     players[playerIdx].hand_remove(cardIdx);
     state.currentCard = chosen;
@@ -274,6 +295,7 @@ void GameEngine::callUno(int playerIdx)
 void GameEngine::catchUno(int callerIdx, int targetIdx)
 {
     if (!state.vietRules) return;
+    if (callerIdx < 0 || callerIdx >= playerCount) return;
     if (targetIdx < 0 || targetIdx >= playerCount) return;
     if (players[targetIdx].get_size() != 1) return;
 
@@ -287,39 +309,60 @@ void GameEngine::catchUno(int callerIdx, int targetIdx)
             reshuffleDiscard();
         players[penaltyTarget].hand_add(mainDeck.draw());
     }
+    m_unoCalled[penaltyTarget] = false;
 }
 
 void GameEngine::applyActionCard(const Card & c)
 {
     if (c.number == CARD_SKIP)
     {
-        state.turn += state.direction;
+        state.turn = (state.turn + state.direction) % playerCount;
+        if (state.turn < 0)
+            state.turn += playerCount;
     }
     else if (c.number == CARD_REVERSE)
     {
         if (playerCount == 2)
-            state.turn += state.direction;
+        {
+            state.turn = (state.turn + state.direction) % playerCount;
+            if (state.turn < 0)
+                state.turn += playerCount;
+        }
         else
+        {
             state.direction = -state.direction;
+        }
     }
-    else if (isStackCard(c))
-    {
-        state.turn += state.direction;
-    }
+    // Note: stack cards (Draw2, WD4) do NOT advance the turn here.
+    // The next player faces the forceDraw penalty on their turn,
+    // and nextTurn() handles the single-step advance.
 }
 
 void GameEngine::nextTurn()
 {
     if (state.jumpState == JumpInState::Taken && state.jumperId >= 0)
     {
+        // Clear UNO flag for outgoing player if not at 1 card
+        if (state.turn >= 0 && state.turn < playerCount && players[state.turn].get_size() != 1)
+            m_unoCalled[state.turn] = false;
+
+        // Set base turn to the jumper
         state.turn = state.jumperId;
         state.jumperId = -1;
         state.jumpState = JumpInState::None;
+
+        // Apply action card effects (Skip, Reverse) from jumper's position
+        applyActionCard(state.currentCard);
+
+        // Advance past the jumper (they already played in jumpIn())
+        state.turn = (state.turn + state.direction) % playerCount;
+        if (state.turn < 0)
+            state.turn += playerCount;
         return;
     }
 
-    // Clear UNO flag for outgoing player
-    if (state.turn >= 0 && state.turn < playerCount)
+    // Clear UNO flag for outgoing player only if they don't have exactly 1 card left
+    if (state.turn >= 0 && state.turn < playerCount && players[state.turn].get_size() != 1)
         m_unoCalled[state.turn] = false;
 
     state.jumpState = JumpInState::None;
@@ -388,6 +431,21 @@ BotActionResult GameEngine::executeBotTurn(int playerIdx)
                                      state.direction, playerIdx,
                                      oppSizes, oppCount,
                                      state.drawStack);
+
+    // Validate the strategy's choice (catches illegal WD4, viet-rules last card, etc.)
+    if (cardIdx >= 0 && !validatePlay(playerIdx, cardIdx))
+    {
+        // Strategy picked an illegal card; find any legal alternative
+        cardIdx = -1;
+        for (int i = 0; i < self->get_size(); i++)
+        {
+            if (validatePlay(playerIdx, i))
+            {
+                cardIdx = i;
+                break;
+            }
+        }
+    }
 
     if (cardIdx < 0)
         return result;
