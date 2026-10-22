@@ -102,7 +102,8 @@ src/
 - `game_view.cpp` — Rewritten as thin orchestrator with particle/animation integration
 
 ## Test Suite ✅
-- 130 comprehensive unit tests covering:
+- 160 tests pass on Windows (Linux adds network transport-buffer tests)
+- Coverage includes:
   - Card & rules validation (Wild Draw 4, Vietnamese illegal last card, Jump-in)
   - Deck creation, reshuffling logic, draw exhaustion
   - Player hand management and bot properties
@@ -110,7 +111,7 @@ src/
   - Draw stacking (+2 on +2, +4) and force draw mechanics
   - UNO calling, false accusations penalty, and catch mechanics
   - Bot AI strategies (Easy, Normal, Hard stack defense, threat blocking)
-- All 130 unit tests pass (100% deterministic)
+- All 160 Windows tests pass (100% deterministic)
 
 ## Remaining Technical Debt
 1. **Audio assets** — Sound files need to be placed in `assets/sounds/` (currently paths are referenced but files may not exist)
@@ -120,7 +121,12 @@ src/
 
 ## Build & Run
 ```bash
-mkdir build && cd build && cmake .. && make   # Linux/WSL/MinGW
-./test_all   # verify all 130 tests
-./gameuno    # launch GUI
+cmake -S . -B build
+cmake --build build -j 4
+./build/test_all   # verify all 160 Windows tests
+./build/gameuno    # launch GUI
 ```
+
+The Linux `network` target is compiled but LAN is intentionally not exposed by
+the GUI yet. Network code cannot be built on Windows/MinGW because the
+authoritative server uses `epoll`.

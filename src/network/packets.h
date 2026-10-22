@@ -41,6 +41,7 @@ struct PacketPlayCard
 struct PacketJumpIn
 {
     unsigned char cardIndex;
+    unsigned char chosenColor;
 };
 
 struct PacketUno

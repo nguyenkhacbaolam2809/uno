@@ -77,6 +77,12 @@ void InputManager::update()
         key = GetKeyPressed();
     }
 
+    for (auto & kv : m_keyReleasedCbs)
+    {
+        if (IsKeyReleased(kv.first))
+            for (auto & cb : kv.second) cb();
+    }
+
     if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) || IsMouseButtonPressed(MOUSE_RIGHT_BUTTON))
     {
         int btn = IsMouseButtonPressed(MOUSE_LEFT_BUTTON) ? 0 : 1;

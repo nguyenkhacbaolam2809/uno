@@ -11,13 +11,13 @@
 
 struct MenuResult {
     int action{0};
-    int botDifficulty{static_cast<int>(BotDifficulty::Easy)};
+    int botDifficulty{1};
     int numHumans{2};
     int numBots{0};
     bool vietRules{false};
     std::string playerName{"Player"};
     std::string serverIp{"127.0.0.1"};
-    int port{8080};
+    int port{8888};
     bool confirmed{false};
 };
 

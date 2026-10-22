@@ -8,6 +8,8 @@
 #include <vector>
 #include <memory>
 #include <map>
+#include <chrono>
+#include <utility>
 #include <sys/epoll.h>
 
 class NetworkServer
@@ -39,6 +41,9 @@ private:
     std::map<int, Client> clients;
     int clientCount;
     bool running;
+    bool gameStarted{false};
+    bool jumpPending{false};
+    std::chrono::steady_clock::time_point jumpDeadline;
 
     bool setNonBlocking(int fd);
     void handleAccept();
@@ -46,6 +51,8 @@ private:
     void handleWrite(int clientId);
     void handleClose(int clientId);
     void broadcastSyncState();
+    void scheduleAfterPlay();
+    void updateJumpWindow();
     int nextClientId();
 };
 

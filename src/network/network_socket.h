@@ -90,7 +90,7 @@ private:
     fd_set m_readSet;
     fd_set m_writeSet;
     fd_set m_errSet;
-    socket_t m_maxFd{INVALID_SOCK};
+    socket_t m_maxFd{0};
     int m_count{0};
     struct WinPollResult {
         socket_t fd;

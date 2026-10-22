@@ -57,9 +57,11 @@ if(NOT WIN32)
     target_include_directories(network PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src/network
         ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/utils
     )
 
     target_link_libraries(network PUBLIC gamecore)
+    target_compile_options(network PRIVATE -Wall -Wextra -Wshadow -Wpedantic -Werror)
 endif()
 
 add_library(utils
@@ -79,6 +81,12 @@ target_include_directories(utils PUBLIC
 )
 
 target_link_libraries(utils PUBLIC raylib)
+
+if(NOT WIN32)
+    # The network backend uses the shared logger from utils. Linking it here
+    # keeps the static-library dependency order valid on Linux.
+    target_link_libraries(network PUBLIC utils)
+endif()
 
 add_executable(gameuno
     main.cpp
@@ -130,10 +138,8 @@ if(ENABLE_SANITIZERS AND NOT WIN32)
     target_link_libraries(gamecore PRIVATE -fsanitize=address,undefined)
     target_link_libraries(utils PRIVATE -fsanitize=address,undefined)
     target_link_libraries(gameuno PRIVATE -fsanitize=address,undefined)
-    if(NOT WIN32)
-        target_compile_options(network PRIVATE -fsanitize=address,undefined)
-        target_link_libraries(network PRIVATE -fsanitize=address,undefined)
-    endif()
+    target_compile_options(network PRIVATE -fsanitize=address,undefined)
+    target_link_libraries(network PRIVATE -fsanitize=address,undefined)
 endif()
 
 if(BUILD_TESTS)

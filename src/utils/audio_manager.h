@@ -4,6 +4,7 @@
 #include "raylib.h"
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 enum class SoundId {
     CARD_SLIDE,
@@ -55,6 +56,7 @@ private:
     float m_effectsVol{1.0f};
 
     std::unordered_map<SoundId, Sound> m_sounds;
+    std::unordered_set<SoundId> m_failedSounds;
     Music m_music{};
     bool m_musicPlaying{false};
 

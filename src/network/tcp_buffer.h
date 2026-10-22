@@ -7,6 +7,7 @@
 #include <cstring>
 #include <algorithm>
 #include <unistd.h>
+#include <sys/socket.h>
 
 struct Packet {
     PacketType type;
@@ -110,20 +111,20 @@ public:
 
     void beginPacket(unsigned char type, unsigned char playerId, int bodyLen)
     {
-        data.clear();
-        writePos = 0;
-        inPacket = true;
-
+        // Append instead of clearing: a previous sync may still be partially
+        // unsent when the next state is broadcast.
+        size_t start = writePos;
         uint32_t totalLen = 4 + 4 + bodyLen;
-        data.resize(totalLen);
+        data.resize(start + totalLen);
 
-        std::memcpy(data.data(), &totalLen, 4);
-        data[4] = static_cast<char>(type);
-        data[5] = static_cast<char>(playerId);
+        std::memcpy(data.data() + start, &totalLen, 4);
+        data[start + 4] = static_cast<char>(type);
+        data[start + 5] = static_cast<char>(playerId);
         uint16_t bLen = static_cast<uint16_t>(bodyLen);
-        std::memcpy(data.data() + 6, &bLen, 2);
-        writePos = 4 + 4;
-        pktSizePos = 0;
+        std::memcpy(data.data() + start + 6, &bLen, 2);
+        writePos = start + 8;
+        pktSizePos = start;
+        inPacket = true;
     }
 
     void writeBody(const void * buf, int len)
@@ -138,7 +139,8 @@ public:
     int flush(int fd)
     {
         if (writePos == 0) return 0;
-        int n = ::write(fd, data.data(), writePos);
+        // Never let a disconnected peer raise SIGPIPE and kill the process.
+        int n = (int)::send(fd, data.data(), writePos, MSG_NOSIGNAL);
         if (n > 0)
         {
             if (n < static_cast<int>(writePos))

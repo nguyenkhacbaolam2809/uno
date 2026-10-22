@@ -14,6 +14,7 @@
 #include "settings.h"
 #include "rng.h"
 #include <cstdlib>
+#include <algorithm>
 
 // --- MenuState ---
 MenuState::MenuState(const GameConfig & cfg)
@@ -51,56 +52,95 @@ void PlayingState::enter()
     if (m_entered) return;
     m_entered = true;
 
-    int total;
-    if (m_lobby.numBots > 0 || m_lobby.numHumans > 1)
-        total = std::max(m_lobby.numHumans + m_lobby.numBots, 2);
-    else
-        total = 2;
+    if (m_lobby.mode == GameMode::LanHost || m_lobby.mode == GameMode::LanClient)
+    {
+        LOG_WARN("%s", "LAN mode is not wired to the GUI; returning to the menu");
+        return;
+    }
+
+    int humans = 1;
+    int bots = 1;
+
+    switch (m_lobby.mode)
+    {
+        case GameMode::Single:
+            humans = 1;
+            bots = std::clamp(m_lobby.numBots, 1, MAX_PLAYERS - 1);
+            break;
+        case GameMode::Local:
+            humans = std::clamp(m_lobby.numHumans, 2, MAX_PLAYERS);
+            bots = 0;
+            break;
+        case GameMode::Mixed:
+            humans = std::clamp(m_lobby.numHumans, 1, MAX_PLAYERS - 1);
+            bots = std::clamp(m_lobby.numBots, 0, MAX_PLAYERS - humans);
+            if (humans + bots < 2)
+                bots = 1;
+            break;
+        default:
+            // Unknown/LAN modes must not silently fall back to a local game.
+            LOG_WARN("%s", "Unsupported game mode; returning to the menu");
+            return;
+    }
+
+    int total = std::clamp(humans + bots, 2, MAX_PLAYERS);
+    if (humans > total)
+        humans = total;
+    bots = total - humans;
 
     m_engine.init(total);
     m_localPlayerId = 0;
+    m_botTimer = -1.0;
+    m_jumpWindow = false;
+
+    int botDifficulty = std::clamp(m_lobby.botDifficulty - 1, 0, 2);
 
     for (int i = 0; i < total; i++)
     {
+        bool isHuman = (i < humans);
         std::string name;
-        PlayerType type = PlayerType::Human;
-        int diff = 0;
+        PlayerType type = isHuman ? PlayerType::Human : PlayerType::Bot;
 
-        if (m_lobby.numHumans > 1)
+        if (isHuman)
         {
-            name = "Player " + std::to_string(i + 1);
-            type = PlayerType::Human;
+            if (m_lobby.mode == GameMode::Local)
+                name = "Player " + std::to_string(i + 1);
+            else if (i == 0)
+                name = m_lobby.playerName.empty() ? "Player" : m_lobby.playerName;
+            else
+                name = "Player " + std::to_string(i + 1);
         }
         else
         {
-            if (i == 0)
-            {
-                name = m_lobby.playerName.empty() ? "Player" : m_lobby.playerName;
-                type = PlayerType::Human;
-            }
-            else
-            {
-                name = "Bot " + std::to_string(i);
-                type = PlayerType::Bot;
-                diff = m_lobby.botDifficulty - 1;
-            }
+            name = "Bot " + std::to_string(i - humans + 1);
         }
 
-        m_engine.addPlayer(name, type, diff);
+        m_engine.addPlayer(name, type, isHuman ? 0 : botDifficulty);
     }
 
     m_engine.start();
-    LOG_INFO("Game started with %d players", total);
+    LOG_INFO("Game started with %d players (%d humans, %d bots)", total, humans, bots);
 }
 
 AppStateId PlayingState::update()
 {
     if (WindowShouldClose()) return AppStateId::EXIT;
 
+    if (m_lobby.mode == GameMode::LanHost || m_lobby.mode == GameMode::LanClient)
+        return AppStateId::MENU;
+    if (m_engine.getPlayerCount() <= 0)
+        return AppStateId::MENU;
+
     if (m_engine.isGameOver())
     {
         LOG_INFO("Game over, winner: %d", m_engine.getWinner());
         return AppStateId::GAME_OVER;
+    }
+
+    if (m_jumpWindow)
+    {
+        updateJumpWindow();
+        return AppStateId::PLAYING_LOCAL;
     }
 
     processTurnLocal();
@@ -132,6 +172,169 @@ static SoundId cardSound(const Card & c)
     return SoundId::CARD_SLIDE;
 }
 
+static bool canPlayerJumpIn(const GameEngine & engine, int playerIdx, bool allowWild)
+{
+    int n = engine.getPlayerCount();
+    if (playerIdx < 0 || playerIdx >= n) return false;
+
+    const Player * p = engine.getPlayer(playerIdx);
+    Card current = engine.getCurrentCard();
+    for (int i = 0; i < p->get_size(); i++)
+    {
+        Card c = p->peek(i);
+        if (!canJumpIn(c, current)) continue;
+        if (!allowWild && c.color == CardColor::Wild) continue;
+        if (p->get_size() == 1 && !isLegalLastCard(c)) continue;
+        return true;
+    }
+    return false;
+}
+
+bool PlayingState::hasJumpCandidate() const
+{
+    int n = m_engine.getPlayerCount();
+    if (n <= 0) return false;
+    int current = m_engine.getCurrentTurn() % n;
+    for (int i = 0; i < n; i++)
+    {
+        if (i == current) continue;
+        bool allowWild = m_engine.getPlayer(i)->isBot();
+        if (canPlayerJumpIn(m_engine, i, allowWild))
+            return true;
+    }
+    return false;
+}
+
+void PlayingState::beginJumpWindow()
+{
+    int n = m_engine.getPlayerCount();
+    if (n <= 0) return;
+    int current = m_engine.getCurrentTurn() % n;
+    double now = GetTime();
+
+    m_jumpWindow = true;
+    m_botTimer = -1.0;
+
+    int humanCandidate = -1;
+    for (int i = 0; i < n; i++)
+    {
+        if (i == current) continue;
+        if (m_engine.getPlayer(i)->isBot()) continue;
+        if (canPlayerJumpIn(m_engine, i, false))
+        {
+            humanCandidate = i;
+            break;
+        }
+    }
+
+    if (humanCandidate >= 0)
+    {
+        m_localPlayerId = humanCandidate;
+        m_jumpDeadline = now + 1.5;
+        // Give the human priority; bots act just before the deadline.
+        m_jumpBotAt = now + 1.45;
+    }
+    else
+    {
+        m_jumpDeadline = now + 0.9;
+        m_jumpBotAt = now + 0.25;
+    }
+}
+
+void PlayingState::updateJumpWindow()
+{
+    int n = m_engine.getPlayerCount();
+    if (n <= 0)
+    {
+        m_jumpWindow = false;
+        return;
+    }
+
+    int current = m_engine.getCurrentTurn() % n;
+    GameState state = m_engine.getState();
+    if (!state.vietRules || state.jumpState != JumpInState::Available)
+    {
+        m_jumpWindow = false;
+        if (!m_engine.isGameOver()) m_engine.nextTurn();
+        return;
+    }
+
+    InteractionResult r = m_gameView->getInteraction();
+
+    if (r.action == PlayerAction::JUMP_IN)
+    {
+        const Player * p = m_engine.getPlayer(m_localPlayerId);
+        if (p && r.cardIndex >= 0 && r.cardIndex < p->get_size())
+        {
+            Card c = p->peek(r.cardIndex);
+            if (m_engine.jumpIn(m_localPlayerId, r.cardIndex, r.chosenColor))
+            {
+                AudioManager::instance().playSound(cardSound(c));
+                m_gameView->showMessage("Jump in!");
+                m_jumpWindow = false;
+                m_botTimer = -1.0;
+                if (!m_engine.isGameOver()) m_engine.nextTurn();
+                return;
+            }
+            m_gameView->showMessage("That card cannot jump in.");
+        }
+    }
+    else if (r.action == PlayerAction::CATCH_UNO)
+    {
+        bool protectedTarget = m_engine.hasCalledUno(r.targetId);
+        AudioManager::instance().playSound(SoundId::CATCH_UNO);
+        m_engine.catchUno(m_localPlayerId, r.targetId);
+        m_gameView->showMessage(protectedTarget
+            ? "False accusation! You draw 2 cards."
+            : "Caught! Target draws 2 cards.");
+    }
+
+    double now = GetTime();
+    if (now >= m_jumpBotAt)
+    {
+        for (int i = 0; i < n; i++)
+        {
+            if (i == current) continue;
+            const Player * p = m_engine.getPlayer(i);
+            if (!p || !p->isBot()) continue;
+
+            BotActionResult act = m_engine.executeBotJumpIn(i);
+            if (act.action != BotAction::JumpIn)
+                continue;
+
+            Card c = p->peek(act.cardIdx);
+            if (m_engine.jumpIn(i, act.cardIdx, act.chosenColor))
+            {
+                AudioManager::instance().playSound(cardSound(c));
+                m_gameView->showMessage("Bot jumped in!");
+                m_jumpWindow = false;
+                m_botTimer = -1.0;
+                if (!m_engine.isGameOver()) m_engine.nextTurn();
+                return;
+            }
+        }
+        m_jumpBotAt = now + 1000.0;
+    }
+
+    if (now >= m_jumpDeadline)
+    {
+        m_jumpWindow = false;
+        m_botTimer = -1.0;
+        if (!m_engine.isGameOver()) m_engine.nextTurn();
+    }
+}
+
+void PlayingState::advanceAfterPlay()
+{
+    if (m_engine.isGameOver()) return;
+
+    GameState state = m_engine.getState();
+    if (state.vietRules && state.jumpState == JumpInState::Available && hasJumpCandidate())
+        beginJumpWindow();
+    else
+        m_engine.nextTurn();
+}
+
 void PlayingState::processTurnLocal()
 {
     int n = m_engine.getPlayerCount();
@@ -141,16 +344,29 @@ void PlayingState::processTurnLocal()
 
     if (p->isBot())
     {
-        static double botTimer = 0.0;
+        // Catching UNO is allowed when it is not your turn. Consume any
+        // pending click here so a catch during a bot turn is not lost (and
+        // so stale hand clicks cannot fire on the next human turn).
+        InteractionResult early = m_gameView->getInteraction();
+        if (early.action == PlayerAction::CATCH_UNO &&
+            m_engine.getState().vietRules)
+        {
+            bool protectedTarget = m_engine.hasCalledUno(early.targetId);
+            AudioManager::instance().playSound(SoundId::CATCH_UNO);
+            m_engine.catchUno(m_localPlayerId, early.targetId);
+            m_gameView->showMessage(protectedTarget
+                ? "False accusation! You draw 2 cards."
+                : "Caught! Target draws 2 cards.");
+        }
 
         double now = GetTime();
-        if (botTimer == 0.0)
-            botTimer = now + 0.5;
+        if (m_botTimer < 0.0)
+            m_botTimer = now + 0.5;
 
-        if (now < botTimer)
+        if (now < m_botTimer)
             return;
 
-        botTimer = 0.0;
+        m_botTimer = -1.0;
 
         BotActionResult act = m_engine.executeBotTurn(currentTurn);
 
@@ -181,7 +397,7 @@ void PlayingState::processTurnLocal()
 
             if (m_engine.playCard(currentTurn, act.cardIdx, act.chosenColor))
             {
-                m_engine.nextTurn();
+                advanceAfterPlay();
             }
             else
             {
@@ -192,6 +408,7 @@ void PlayingState::processTurnLocal()
     }
     else
     {
+        m_localPlayerId = currentTurn;
         InteractionResult r = m_gameView->getInteraction();
         if (r.action == PlayerAction::PLAY_CARD)
         {
@@ -200,9 +417,13 @@ void PlayingState::processTurnLocal()
                 Card c = m_engine.getPlayer(m_localPlayerId)->peek(r.cardIndex);
                 AudioManager::instance().playSound(cardSound(c));
                 if (m_engine.playCard(m_localPlayerId, r.cardIndex, r.chosenColor))
-                {
-                    m_engine.nextTurn();
-                }
+                    advanceAfterPlay();
+                else
+                    m_gameView->showMessage("You cannot play that card.");
+            }
+            else
+            {
+                m_gameView->showMessage("You cannot play that card.");
             }
         }
         else if (r.action == PlayerAction::DRAW_CARD)
@@ -213,13 +434,27 @@ void PlayingState::processTurnLocal()
         }
         else if (r.action == PlayerAction::SAY_UNO)
         {
-            AudioManager::instance().playSound(SoundId::UNO_BUTTON);
-            m_engine.callUno(m_localPlayerId);
+            if (m_engine.callUno(m_localPlayerId))
+            {
+                AudioManager::instance().playSound(SoundId::UNO_BUTTON);
+                m_gameView->showMessage("UNO!");
+            }
+            else
+            {
+                m_gameView->showMessage("Call UNO when you have two cards on your turn.");
+            }
         }
         else if (r.action == PlayerAction::CATCH_UNO)
         {
-            AudioManager::instance().playSound(SoundId::CATCH_UNO);
-            m_engine.catchUno(m_localPlayerId, r.targetId);
+            if (m_engine.getState().vietRules)
+            {
+                bool protectedTarget = m_engine.hasCalledUno(r.targetId);
+                AudioManager::instance().playSound(SoundId::CATCH_UNO);
+                m_engine.catchUno(m_localPlayerId, r.targetId);
+                m_gameView->showMessage(protectedTarget
+                    ? "False accusation! You draw 2 cards."
+                    : "Caught! Target draws 2 cards.");
+            }
         }
     }
 }
@@ -236,20 +471,27 @@ void GameOverState::enter()
     m_entered = true;
     AudioManager::instance().playSound(
         m_info.winner == m_info.localPlayerId ? SoundId::WIN : SoundId::LOSE);
+
+    ParticleBurstConfig cfg;
+    cfg.origin = { uno::SCREEN_W / 2.0f, uno::SCREEN_H / 2.0f - 40.0f };
+    cfg.count = 80;
+    cfg.speedMin = 120;
+    cfg.speedMax = 460;
+    cfg.lifeMin = 1.0f;
+    cfg.lifeMax = 2.8f;
+    cfg.sizeMin = 3;
+    cfg.sizeMax = 9;
+    cfg.colorStart = uno::GOLD_COLOR;
+    cfg.colorEnd = Fade(uno::GOLD_COLOR, 0);
+    cfg.spread = 360;
+    ParticleSystem::instance().burst(cfg);
 }
 
 AppStateId GameOverState::update()
 {
     if (WindowShouldClose()) return AppStateId::EXIT;
-    Rectangle menuButton = {
-        uno::SCREEN_W / 2.0f - 110.0f,
-        uno::SCREEN_H / 2.0f + 60.0f,
-        220.0f,
-        48.0f
-    };
     if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE) ||
-        (CheckCollisionPointRec(GetMousePosition(), menuButton) &&
-         IsMouseButtonPressed(MOUSE_LEFT_BUTTON)))
+        IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
         return AppStateId::MENU;
     return AppStateId::GAME_OVER;
 }
@@ -408,6 +650,16 @@ void AppStateMachine::extractLobbyFromMenu()
     m_lobbyConfig.playerName = r.playerName.empty() ? "Player" : r.playerName;
     m_lobbyConfig.isLanServer = (r.action == 4);
     m_lobbyConfig.isLanClient = (r.action == 5);
+
+    switch (r.action)
+    {
+        case 1: m_lobbyConfig.mode = GameMode::Single; break;
+        case 2: m_lobbyConfig.mode = GameMode::Local; break;
+        case 3: m_lobbyConfig.mode = GameMode::Mixed; break;
+        case 4: m_lobbyConfig.mode = GameMode::LanHost; break;
+        case 5: m_lobbyConfig.mode = GameMode::LanClient; break;
+        default: m_lobbyConfig.mode = GameMode::Single; break;
+    }
 }
 
 void AppStateMachine::extractGameOverFromPlaying()

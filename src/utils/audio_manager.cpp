@@ -32,6 +32,7 @@ void AudioManager::shutdown()
     for (auto & kv : m_sounds)
         ::UnloadSound(kv.second);
     m_sounds.clear();
+    m_failedSounds.clear();
 
     if (m_musicPlaying)
     {
@@ -75,6 +76,8 @@ void AudioManager::loadSounds()
 
 void AudioManager::loadSoundForId(SoundId id)
 {
+    if (m_failedSounds.find(id) != m_failedSounds.end()) return;
+
     auto paths = soundPaths();
     auto it = paths.find(id);
     if (it == paths.end()) return;
@@ -83,7 +86,11 @@ void AudioManager::loadSoundForId(SoundId id)
     if (s.stream.buffer != nullptr)
         m_sounds[id] = s;
     else
+    {
+        // Do not retry a missing file every frame/action.
+        m_failedSounds.insert(id);
         LOG_WARN("Failed to load sound: %s", it->second.c_str());
+    }
 }
 
 void AudioManager::playSound(SoundId id)

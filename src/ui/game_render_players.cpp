@@ -7,6 +7,7 @@
 
 using uno::SCREEN_W;
 using uno::SCREEN_H;
+using uno::CARD_HEIGHT;
 using uno::WHITE_SMOKE;
 using uno::GOLD_COLOR;
 
@@ -79,6 +80,9 @@ void GameView::renderOpponents(const GameEngine & engine, int localPlayerId)
 
 void GameView::renderTurnIndicator(const GameEngine & engine, int localPlayerId)
 {
+    if (needsColorPick) return;
+    if (engine.getPhase() != GamePhase::Play) return;
+
     int n = engine.getPlayerCount();
     if (n <= 0 || localPlayerId < 0 || localPlayerId >= n)
         return;
@@ -87,7 +91,7 @@ void GameView::renderTurnIndicator(const GameEngine & engine, int localPlayerId)
 
     if (current == localPlayerId)
     {
-        Rectangle btn = { (float)(SCREEN_W - 180), (float)(SCREEN_H - 75), 140, 40 };
+        Rectangle btn = { (float)(SCREEN_W - 180), (float)(SCREEN_H - CARD_HEIGHT - 100), 140, 40 };
         Color drawHover = { 200, 180, 0, 255 };
         Color drawNormal = { 180, 140, 20, 255 };
         DrawRectangleRounded(btn, 0.3f, 10, CheckCollisionPointRec(GetMousePosition(), btn) ? drawHover : drawNormal);

@@ -4,6 +4,8 @@
 #include <cstring>
 #include <sstream>
 #include <string>
+#include <cerrno>
+#include <chrono>
 #include <fcntl.h>
 #include <unistd.h>
 #include <netinet/in.h>
@@ -28,6 +30,9 @@ bool NetworkServer::setNonBlocking(int fd)
 
 bool NetworkServer::start(int port)
 {
+    // Restarting must not leak the previous listener, epoll fd, or clients.
+    stop();
+
     listenFd = socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK, 0);
     if (listenFd < 0) return false;
 
@@ -41,20 +46,42 @@ bool NetworkServer::start(int port)
     addr.sin_port = htons(port);
 
     if (bind(listenFd, (struct sockaddr *)&addr, sizeof(addr)) < 0)
-    { close(listenFd); return false; }
+    {
+        close(listenFd);
+        listenFd = -1;
+        return false;
+    }
 
     if (listen(listenFd, MAX_CLIENTS) < 0)
-    { close(listenFd); return false; }
+    {
+        close(listenFd);
+        listenFd = -1;
+        return false;
+    }
 
     epollFd = epoll_create1(0);
-    if (epollFd < 0) { close(listenFd); return false; }
+    if (epollFd < 0)
+    {
+        close(listenFd);
+        listenFd = -1;
+        return false;
+    }
 
     struct epoll_event ev;
     ev.events = EPOLLIN | EPOLLET;
     ev.data.u32 = 0;
-    epoll_ctl(epollFd, EPOLL_CTL_ADD, listenFd, &ev);
+    if (epoll_ctl(epollFd, EPOLL_CTL_ADD, listenFd, &ev) < 0)
+    {
+        close(listenFd);
+        listenFd = -1;
+        close(epollFd);
+        epollFd = -1;
+        return false;
+    }
 
     running = true;
+    gameStarted = false;
+    jumpPending = false;
     LOG_INFO("Server started on port %d", port);
     return true;
 }
@@ -73,6 +100,8 @@ void NetworkServer::stop()
     }
     clients.clear();
     clientCount = 0;
+    gameStarted = false;
+    jumpPending = false;
 
     if (listenFd >= 0)
     {
@@ -103,12 +132,32 @@ bool NetworkServer::waitForPlayers(int expectedPlayers)
     while (running && clientCount < expectedPlayers)
     {
         int n = epoll_wait(epollFd, events, 16, 1000);
-        if (n < 0) continue;
+        if (n < 0)
+        {
+            if (errno == EINTR) continue;
+            LOG_ERROR("epoll_wait failed while waiting for players: errno=%d", errno);
+            running = false;
+            break;
+        }
 
         for (int i = 0; i < n; i++)
         {
             if (events[i].data.u32 == 0)
+            {
                 handleAccept();
+                continue;
+            }
+
+            int clientId = (int)events[i].data.u32 - 1;
+            if (events[i].events & (EPOLLHUP | EPOLLRDHUP | EPOLLERR))
+                handleClose(clientId);
+            else
+            {
+                if (events[i].events & EPOLLOUT)
+                    handleWrite(clientId);
+                if (events[i].events & EPOLLIN && clients.find(clientId) != clients.end())
+                    handleRead(clientId);
+            }
         }
     }
     return running;
@@ -116,27 +165,51 @@ bool NetworkServer::waitForPlayers(int expectedPlayers)
 
 void NetworkServer::handleAccept()
 {
-    sockaddr_in addr;
-    socklen_t addrLen = sizeof(addr);
-    int newFd = accept(listenFd, (struct sockaddr *)&addr, &addrLen);
-    if (newFd < 0) return;
-    setNonBlocking(newFd);
+    for (;;)
+    {
+        sockaddr_in addr;
+        socklen_t addrLen = sizeof(addr);
+        int newFd = accept(listenFd, (struct sockaddr *)&addr, &addrLen);
+        if (newFd < 0)
+        {
+            if (errno == EINTR)
+                continue;
+            return;
+        }
+        if (!setNonBlocking(newFd))
+        {
+            close(newFd);
+            continue;
+        }
 
-    int id = nextClientId();
-    if (id < 0) { close(newFd); return; }
+        if (gameStarted)
+        {
+            close(newFd);
+            continue;
+        }
 
-    Client ctx;
-    ctx.fd = newFd;
-    ctx.connected = true;
-    clients[id] = std::move(ctx);
-    clientCount++;
+        int id = nextClientId();
+        if (id < 0) { close(newFd); continue; }
 
-    struct epoll_event ev;
-    ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
-    ev.data.u32 = id + 1;
-    epoll_ctl(epollFd, EPOLL_CTL_ADD, newFd, &ev);
+        Client ctx;
+        ctx.fd = newFd;
+        ctx.connected = true;
+        clients[id] = std::move(ctx);
+        clientCount++;
 
-    LOG_INFO("Player %d connected (id=%d)", clientCount, id);
+        struct epoll_event ev;
+        ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+        ev.data.u32 = id + 1;
+        if (epoll_ctl(epollFd, EPOLL_CTL_ADD, newFd, &ev) < 0)
+        {
+            clients.erase(id);
+            clientCount--;
+            close(newFd);
+            continue;
+        }
+
+        LOG_INFO("Player %d connected (id=%d)", clientCount, id);
+    }
 }
 
 void NetworkServer::handleRead(int clientId)
@@ -145,97 +218,140 @@ void NetworkServer::handleRead(int clientId)
     if (it == clients.end()) return;
 
     Client & ctx = it->second;
-    int n = ctx.recvBuf.fill(ctx.fd);
-    if (n <= 0) { handleClose(clientId); return; }
 
-    while (ctx.recvBuf.hasPacket())
+    // EPOLLET only reports the transition to readable. Keep reading until the
+    // socket would block, otherwise a second packet in the same burst can be
+    // stuck in the kernel buffer forever.
+    for (;;)
     {
-        auto pkt = ctx.recvBuf.readPacket();
-
-        if (pkt.type == PacketType::Heartbeat)
+        int n = ctx.recvBuf.fill(ctx.fd);
+        if (n == 0) { handleClose(clientId); return; }
+        if (n < 0)
         {
-            if (pkt.body.size() >= sizeof(PacketVersion))
+            if (errno == EINTR) continue;
+            if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+            handleClose(clientId);
+            return;
+        }
+
+        while (ctx.recvBuf.hasPacket())
+        {
+            auto pkt = ctx.recvBuf.readPacket();
+
+            if (pkt.type == PacketType::Heartbeat)
             {
-                const PacketVersion * pv = reinterpret_cast<const PacketVersion *>(pkt.body.data());
-                if (pv->version != PROTOCOL_VERSION)
+                if (pkt.body.size() >= sizeof(PacketVersion))
                 {
-                    LOG_ERROR("Client %d: protocol version mismatch %d != %d",
-                              clientId, (int)pv->version, PROTOCOL_VERSION);
-                    handleClose(clientId);
-                    return;
-                }
-            }
-            continue;
-        }
-
-        unsigned char pid = pkt.playerId;
-
-        if (pid >= static_cast<unsigned char>(engine.getPlayerCount()))
-        {
-            LOG_WARN("Player %d: invalid pid=%d", clientId, (int)pid);
-            continue;
-        }
-
-        if (pkt.length < 2)
-        {
-            LOG_WARN("Player %d: packet too short", clientId);
-            continue;
-        }
-
-        if (static_cast<int>(pkt.body.size()) > 4096)
-        {
-            LOG_WARN("Player %d: packet body too large: %zu", clientId, pkt.body.size());
-            continue;
-        }
-
-        switch (pkt.type)
-        {
-            case PacketType::PlayCard:
-            {
-                if (pkt.body.size() >= sizeof(PacketPlayCard))
-                {
-                    const PacketPlayCard * pc = reinterpret_cast<const PacketPlayCard *>(pkt.body.data());
-                    if (pc->chosenColor >= 1 && pc->chosenColor <= 4)
+                    const PacketVersion * pv = reinterpret_cast<const PacketVersion *>(pkt.body.data());
+                    if (pv->version != PROTOCOL_VERSION)
                     {
-                        engine.playCard(pid, pc->cardIndex, static_cast<CardColor>(pc->chosenColor));
-                        broadcastSyncState();
+                        LOG_ERROR("Client %d: protocol version mismatch %d != %d",
+                                  clientId, (int)pv->version, PROTOCOL_VERSION);
+                        handleClose(clientId);
+                        return;
                     }
                 }
-                break;
+                continue;
             }
-            case PacketType::Draw:
-                if (pkt.body.size() == 0)
+
+            if (!gameStarted)
+            {
+                LOG_WARN("Client %d: action before game start", clientId);
+                continue;
+            }
+
+            // The engine player id is assigned by the server, never trusted
+            // from the packet header. This stops a client from acting as
+            // another player.
+            if (pkt.playerId != static_cast<unsigned char>(clientId))
+            {
+                LOG_WARN("Client %d: spoofed player id %d", clientId, (int)pkt.playerId);
+                continue;
+            }
+
+            if (pkt.body.size() > 4096)
+            {
+                LOG_WARN("Client %d: packet body too large: %zu", clientId, pkt.body.size());
+                continue;
+            }
+
+            if (clientId >= engine.getPlayerCount())
+            {
+                LOG_WARN("Client %d: not mapped to a player", clientId);
+                continue;
+            }
+
+            switch (pkt.type)
+            {
+                case PacketType::PlayCard:
                 {
-                    engine.drawCard(pid);
-                    broadcastSyncState();
-                }
-                break;
-            case PacketType::JumpIn:
-                if (pkt.body.size() >= sizeof(PacketJumpIn))
-                {
-                    const PacketJumpIn * pj = reinterpret_cast<const PacketJumpIn *>(pkt.body.data());
-                    engine.jumpIn(pid, pj->cardIndex);
-                    broadcastSyncState();
-                }
-                break;
-            case PacketType::CallUno:
-                if (pkt.body.size() == 0)
-                    engine.callUno(pid);
-                break;
-            case PacketType::CatchUno:
-                if (pkt.body.size() >= sizeof(PacketUno))
-                {
-                    const PacketUno * pu = reinterpret_cast<const PacketUno *>(pkt.body.data());
-                    if (pu->targetId < static_cast<unsigned char>(engine.getPlayerCount()))
+                    if (jumpPending)
                     {
-                        engine.catchUno(pid, pu->targetId);
+                        LOG_WARN("Client %d: play during jump-in window", clientId);
+                        break;
+                    }
+                    if (pkt.body.size() >= sizeof(PacketPlayCard))
+                    {
+                        const PacketPlayCard * pc =
+                            reinterpret_cast<const PacketPlayCard *>(pkt.body.data());
+                        if (pc->chosenColor >= 1 && pc->chosenColor <= 4)
+                        {
+                            if (engine.playCard(clientId, pc->cardIndex,
+                                                static_cast<CardColor>(pc->chosenColor)))
+                                scheduleAfterPlay();
+                        }
+                    }
+                    break;
+                }
+                case PacketType::Draw:
+                    if (jumpPending)
+                    {
+                        LOG_WARN("Client %d: draw during jump-in window", clientId);
+                        break;
+                    }
+                    if (pkt.body.empty() && engine.drawCard(clientId))
+                    {
+                        engine.nextTurn();
                         broadcastSyncState();
                     }
-                }
-                break;
-            default:
-                LOG_WARN("Player %d: unknown packet type %d", clientId, static_cast<int>(pkt.type));
-                break;
+                    break;
+                case PacketType::JumpIn:
+                    if (pkt.body.size() >= sizeof(PacketJumpIn))
+                    {
+                        const PacketJumpIn * pj =
+                            reinterpret_cast<const PacketJumpIn *>(pkt.body.data());
+                        if (engine.jumpIn(clientId, pj->cardIndex,
+                                          static_cast<CardColor>(pj->chosenColor)))
+                        {
+                            jumpPending = false;
+                            if (!engine.isGameOver())
+                                engine.nextTurn();
+                            broadcastSyncState();
+                        }
+                    }
+                    break;
+                case PacketType::CallUno:
+                    if (pkt.body.empty())
+                        engine.callUno(clientId);
+                    break;
+                case PacketType::CatchUno:
+                    if (pkt.body.size() >= sizeof(PacketUno))
+                    {
+                        const PacketUno * pu =
+                            reinterpret_cast<const PacketUno *>(pkt.body.data());
+                        if (pu->targetId < static_cast<unsigned char>(engine.getPlayerCount()) &&
+                            pu->targetId != static_cast<unsigned char>(clientId))
+                        {
+                            engine.catchUno(clientId, pu->targetId);
+                            broadcastSyncState();
+                        }
+                    }
+                    break;
+                default:
+                    LOG_WARN("Player %d: unknown packet type %d", clientId,
+                             static_cast<int>(pkt.type));
+                    break;
+            }
         }
     }
 
@@ -253,7 +369,13 @@ void NetworkServer::handleWrite(int clientId)
 
     Client & ctx = it->second;
     int n = ctx.sendBuf.flush(ctx.fd);
-    if (n < 0) handleClose(clientId);
+    if (n < 0)
+    {
+        if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)
+            return;
+        handleClose(clientId);
+        return;
+    }
 
     if (ctx.sendBuf.idle())
     {
@@ -278,6 +400,12 @@ void NetworkServer::handleClose(int clientId)
     clients.erase(clientId);
     clientCount--;
     LOG_INFO("Player %d disconnected", clientId);
+
+    // There is no reconnection/turn-transfer support yet. Continuing after a
+    // mid-game disconnect would leave the game stuck on the missing player's
+    // turn, so end this session instead of hanging forever.
+    if (gameStarted)
+        running = false;
 }
 
 void NetworkServer::broadcastSyncState()
@@ -361,13 +489,72 @@ void NetworkServer::broadcastSyncState()
     }
 }
 
+void NetworkServer::scheduleAfterPlay()
+{
+    if (engine.isGameOver())
+    {
+        broadcastSyncState();
+        running = false;
+        return;
+    }
+
+    GameState gs = engine.getState();
+    if (gs.vietRules && gs.jumpState == JumpInState::Available)
+    {
+        jumpPending = true;
+        jumpDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(600);
+        broadcastSyncState();
+        return;
+    }
+
+    engine.nextTurn();
+    broadcastSyncState();
+}
+
+void NetworkServer::updateJumpWindow()
+{
+    if (!jumpPending) return;
+    if (std::chrono::steady_clock::now() < jumpDeadline) return;
+
+    jumpPending = false;
+    if (!engine.isGameOver())
+        engine.nextTurn();
+    broadcastSyncState();
+}
+
 void NetworkServer::runGameLoop()
 {
-    int connectedPlayers = clientCount;
-    if (connectedPlayers == 0) return;
+    if (clientCount == 0) return;
 
-    engine.init(connectedPlayers);
-    for (int i = 0; i < connectedPlayers; i++)
+    // Compact client ids so they line up with engine player indices. This is
+    // important if somebody disconnected while waiting for players.
+    {
+        std::map<int, Client> compacted;
+        int nextId = 0;
+        for (auto & kv : clients)
+        {
+            Client ctx = std::move(kv.second);
+            struct epoll_event ev;
+            ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+            ev.data.u32 = nextId + 1;
+            epoll_ctl(epollFd, EPOLL_CTL_MOD, ctx.fd, &ev);
+            compacted[nextId++] = std::move(ctx);
+        }
+        clients.swap(compacted);
+        clientCount = nextId;
+    }
+
+    if (clientCount < 2)
+    {
+        LOG_WARN("Network game needs at least 2 players");
+        running = false;
+        return;
+    }
+
+    gameStarted = true;
+
+    engine.init(clientCount);
+    for (int i = 0; i < clientCount; i++)
     {
         std::string pname = "Player ";
         pname += std::to_string(i + 1);
@@ -381,24 +568,39 @@ void NetworkServer::runGameLoop()
 
     while (running && !engine.isGameOver())
     {
+        updateJumpWindow();
+
         int n = epoll_wait(epollFd, events, 16, 50);
-        if (n < 0) continue;
+        if (n < 0)
+        {
+            if (errno == EINTR) continue;
+            break;
+        }
 
         for (int i = 0; i < n; i++)
         {
             if (events[i].data.u32 == 0)
-                handleAccept();
-            else
             {
-                int clientId = (int)events[i].data.u32 - 1;
-                if (events[i].events & (EPOLLHUP | EPOLLRDHUP | EPOLLERR))
-                    handleClose(clientId);
-                else if (events[i].events & EPOLLOUT)
-                    handleWrite(clientId);
-                else if (events[i].events & EPOLLIN)
-                    handleRead(clientId);
+                handleAccept();
+                continue;
             }
+
+            int clientId = (int)events[i].data.u32 - 1;
+            if (events[i].events & (EPOLLHUP | EPOLLRDHUP | EPOLLERR))
+            {
+                handleClose(clientId);
+                continue;
+            }
+
+            if (events[i].events & EPOLLOUT)
+                handleWrite(clientId);
+
+            if ((events[i].events & EPOLLIN) &&
+                clients.find(clientId) != clients.end())
+                handleRead(clientId);
         }
+
+        updateJumpWindow();
 
         if (engine.isGameOver())
         {
@@ -413,4 +615,6 @@ void NetworkServer::runGameLoop()
         if (winner >= 0)
             LOG_INFO("%s wins!", engine.getPlayer(winner)->getName().c_str());
     }
+
+    running = false;
 }

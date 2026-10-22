@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- Turn/draw validation, action-card ordering before a finish, UNO timing, self-catch rejection, and jump-in validation.
+- Hard-bot opponent index mapping and bot use of validated legal cards.
+- Overlapping hand-card hit-testing, color-picker cancellation, catch/jump-in hitboxes, DRAW/UNO button placement, and hot-seat turn handling.
+- Network server/client lifecycle, edge-triggered reads, buffered writes, protocol validation, SIGPIPE handling, and disconnect handling.
+- Asset/audio shutdown order and animation/input/debug utilities.
+
+### Changed
+- Windows test suite passes 160 tests. Linux additionally builds network transport-buffer tests.
+- LAN remains disabled in the GUI because the authoritative server is Linux-only and GUI integration is not complete.
+
 ## [1.0.0] - 2026-07-28
 
 ### Added

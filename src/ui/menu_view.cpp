@@ -41,6 +41,7 @@ const char * MenuView::msg(int id) const
             case 20: return "Choose a color:";
             case 21: return "Number of bots:";
             case 22: return "Number of humans:";
+            case 23: return "LAN mode is not available in this build.";
             default: return "";
         }
     }
@@ -68,6 +69,7 @@ const char * MenuView::msg(int id) const
         case 20: return "Chon mau:";
         case 21: return "So Bot:";
         case 22: return "So nguoi:";
+        case 23: return "Che do LAN chua kha dung trong ban nay.";
         default: return "";
     }
 }
@@ -214,15 +216,13 @@ void MenuView::stepMain()
     Color redBtn = { 237, 28, 36, 255 };
     Color blueBtn = { 0, 114, 188, 255 };
     Color greenBtn = { 0, 155, 72, 255 };
-    Color brownBtn = { 180, 100, 20, 255 };
     Color grayBtn = { 80, 80, 80, 255 };
 
     std::vector<Button> btns;
     btns.push_back(makeButton(bx, by, bw, bh, msg(2), redBtn));
     btns.push_back(makeButton(bx, by + (bh + gap) * 1, bw, bh, msg(3), blueBtn));
     btns.push_back(makeButton(bx, by + (bh + gap) * 2, bw, bh, msg(4), greenBtn));
-    btns.push_back(makeButton(bx, by + (bh + gap) * 3, bw, bh, msg(5), brownBtn));
-    btns.push_back(makeButton(bx, by + (bh + gap) * 4, bw, bh, msg(6), grayBtn));
+    btns.push_back(makeButton(bx, by + (bh + gap) * 3, bw, bh, msg(6), grayBtn));
 
     for (size_t i = 0; i < btns.size(); i++)
     {
@@ -231,8 +231,7 @@ void MenuView::stepMain()
             if (i == 0) { m_phase = MenuPhase::Difficulty; resetTo(MenuPhase::Difficulty); return; }
             if (i == 1) { m_phase = MenuPhase::LocalSetup; resetTo(MenuPhase::LocalSetup); return; }
             if (i == 2) { m_phase = MenuPhase::MixedSetup; resetTo(MenuPhase::MixedSetup); return; }
-            if (i == 3) { m_phase = MenuPhase::Lan;        resetTo(MenuPhase::Lan);        return; }
-            if (i == 4)
+            if (i == 3)
             {
                 m_stepResult.action = -1;
                 m_stepResult.confirmed = true;
@@ -247,11 +246,18 @@ void MenuView::drawMain()
 {
     drawTitle(msg(1), 60, 80, GOLD_COLOR);
     drawTextCentered("Multiplayer Card Game", 140, 24, WHITE_SMOKE);
+    drawTextCentered(msg(23), 500, 18, Fade(WHITE_SMOKE, 0.6f));
 }
 
 // ==================== DIFFICULTY SELECT ====================
 void MenuView::stepDifficulty()
 {
+    // Escape while editing the name must cancel editing, not navigate back.
+    if (IsKeyPressed(KEY_ESCAPE) && m_stringEditing)
+    {
+        m_stringEditing = false;
+        return;
+    }
     if (handleBackButton()) return;
 
     int bw = 260, bh = 44, gap = 12;
@@ -275,11 +281,6 @@ void MenuView::stepDifficulty()
         m_stringEditing = true;
     if (IsKeyPressed(KEY_ENTER))
         m_stringEditing = !m_stringEditing;
-    if (IsKeyPressed(KEY_ESCAPE) && m_stringEditing)
-    {
-        m_stringEditing = false;
-        return;
-    }
     if (m_stringEditing)
     {
         int k = GetCharPressed();
@@ -387,7 +388,7 @@ void MenuView::stepLocalSetup()
     if (CheckCollisionPointRec(GetMousePosition(), minusRect) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
         m_humanCount = std::max(2, m_humanCount - 1);
     if (CheckCollisionPointRec(GetMousePosition(), plusRect) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
-        m_humanCount = std::min(4, m_humanCount + 1);
+        m_humanCount = std::min(MAX_PLAYERS, m_humanCount + 1);
 
     Rectangle vietBtn = { (float)(SCREEN_W / 2 - 150), 240, 300, 40 };
     if (CheckCollisionPointRec(GetMousePosition(), vietBtn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
@@ -447,11 +448,13 @@ void MenuView::stepMixedSetup()
 
     if (CheckCollisionPointRec(GetMousePosition(), hMinus) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
         m_humanCount = std::max(1, m_humanCount - 1);
-    if (CheckCollisionPointRec(GetMousePosition(), hPlus) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+    if (CheckCollisionPointRec(GetMousePosition(), hPlus) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON) &&
+        m_humanCount + m_botCount < MAX_PLAYERS)
         m_humanCount = std::min(4, m_humanCount + 1);
     if (CheckCollisionPointRec(GetMousePosition(), bMinus) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
         m_botCount = std::max(0, m_botCount - 1);
-    if (CheckCollisionPointRec(GetMousePosition(), bPlus) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+    if (CheckCollisionPointRec(GetMousePosition(), bPlus) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON) &&
+        m_humanCount + m_botCount < MAX_PLAYERS)
         m_botCount = std::min(4, m_botCount + 1);
 
     int bw = 200, bh = 36, gap = 8;
@@ -476,7 +479,7 @@ void MenuView::stepMixedSetup()
     {
         m_stepResult.action = 3;
         m_stepResult.numHumans = m_humanCount;
-        m_stepResult.numBots = m_botCount;
+        m_stepResult.numBots = (m_humanCount + m_botCount < 2) ? 1 : m_botCount;
         m_stepResult.botDifficulty = m_diffChoice;
         m_stepResult.vietRules = m_vietRules;
         m_stepResult.confirmed = true;

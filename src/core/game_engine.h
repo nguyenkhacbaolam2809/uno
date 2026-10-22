@@ -88,10 +88,11 @@ public:
 
     bool validatePlay(int playerIdx, int cardIdx) const;
     bool playCard(int playerIdx, int cardIdx, CardColor chosenColor);
-    void drawCard(int playerIdx);
-    bool jumpIn(int playerIdx, int cardIdx);
-    void callUno(int playerIdx);
+    bool drawCard(int playerIdx);
+    bool jumpIn(int playerIdx, int cardIdx, CardColor chosenColor = CardColor::Wild);
+    bool callUno(int playerIdx);
     void catchUno(int callerIdx, int targetIdx);
+    [[nodiscard]] bool hasCalledUno(int playerIdx) const noexcept;
 
     void nextTurn();
     void reshuffleDiscard();
@@ -116,6 +117,7 @@ private:
     void initDecks();
     void dealCards();
     void chooseRandomStarter();
+    bool drawOne(Player & player);
     void applyActionCard(const Card & c);
     void recordFinish(int playerIdx);
     int countActivePlayers() const noexcept;

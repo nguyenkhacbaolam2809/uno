@@ -56,7 +56,12 @@ int HardBotStrategy::findThreatBlock(Player * self, const Card & current,
 {
     if (opponentCount <= 0 || opponentSizes == nullptr) return -1;
 
-    int nextIdx = (selfIdx + direction + opponentCount * 2) % opponentCount;
+    // opponentSizes excludes self, so convert the absolute next player index
+    // into the corresponding slot in that compacted array.
+    int playerCount = opponentCount + 1;
+    int nextPlayer = (selfIdx + direction + playerCount) % playerCount;
+    int nextIdx = (nextPlayer > selfIdx) ? nextPlayer - 1 : nextPlayer;
+    if (nextIdx < 0 || nextIdx >= opponentCount) return -1;
 
     if (opponentSizes[nextIdx] > 0 && opponentSizes[nextIdx] <= 2)
     {

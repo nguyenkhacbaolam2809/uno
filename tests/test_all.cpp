@@ -351,6 +351,38 @@ void testTcpBufferMalformedFrames()
     buffer.readPacket();
     TEST("malformed frame is discarded", !buffer.hasPacket());
 
+    // A sync state can still be partially unsent when the next one is queued.
+    // SendBuffer must append, not overwrite, or a slow client loses state.
+    {
+        int tx[2] = {-1, -1};
+        TEST("send pair created", socketpair(AF_UNIX, SOCK_STREAM, 0, tx) == 0);
+        if (tx[0] >= 0)
+        {
+            SendBuffer send;
+            const char first[4] = {'A', 'B', 'C', 'D'};
+            const char second[4] = {'E', 'F', 'G', 'H'};
+            send.beginPacket(static_cast<unsigned char>(PacketType::SyncState), 0, 4);
+            send.writeBody(first, 4);
+            send.beginPacket(static_cast<unsigned char>(PacketType::Heartbeat), 0, 4);
+            send.writeBody(second, 4);
+
+            TEST("queued packets flush together", send.flush(tx[0]) == 24);
+            TEST("send buffer becomes idle after flush", send.idle());
+
+            RecvBuffer recv;
+            TEST("receiver gets both packets", recv.fill(tx[1]) == 24);
+            auto p1 = recv.readPacket();
+            auto p2 = recv.readPacket();
+            TEST("first packet survives append", p1.type == PacketType::SyncState &&
+                 p1.body == std::vector<char>(first, first + 4));
+            TEST("second packet survives append", p2.type == PacketType::Heartbeat &&
+                 p2.body == std::vector<char>(second, second + 4));
+
+            close(tx[0]);
+            close(tx[1]);
+        }
+    }
+
     close(sockets[0]);
     close(sockets[1]);
 }
@@ -732,6 +764,10 @@ void testVietnameseRulesComprehensive()
         pJ1->hand_add(Card(2, CardColor::Green));
         jEngine.playCard(jNext, 0, CardColor::Green);
 
+        pJ1->hand_add(Card(6, CardColor::Green));
+        TEST("current player cannot jump in on their own card",
+             !jEngine.jumpIn(jNext, pJ1->get_size() - 1));
+
         int otherP = (jNext + 2) % 3;
         Player * pOther = jEngine.getPlayer(otherP);
         while (pOther->get_size() > 0) pOther->hand_remove(0);
@@ -784,6 +820,10 @@ void testVietnameseRulesComprehensive()
         TEST("pMain has 1 card left", pMain->get_size() == 1);
 
         int otherSizeBefore = uEngine.getPlayer(pOther)->get_size();
+        // A player cannot catch themselves, even if they forgot to call UNO.
+        uEngine.catchUno(pTurn, pTurn);
+        TEST("A player cannot catch themselves", pMain->get_size() == 1);
+
         // pOther attempts false catch:
         uEngine.catchUno(pOther, pTurn);
         TEST("Protected target retains 1 card on false catch", pMain->get_size() == 1);
@@ -821,15 +861,33 @@ void testDeckReshuffleLogic()
     engine.addPlayer("P1", PlayerType::Human, 0);
     engine.start();
 
-    // Draw cards until initial deck is exhausted and discard reshuffles
-    int drawCount = 0;
-    while (drawCount < 110)
+    // Draw cards until the initial deck is exhausted and the discard pile is
+    // reshuffled. drawCard() is turn-checked, so advance the turn between draws.
+    int turn = engine.getCurrentTurn();
+    for (int drawCount = 0; drawCount < 300; ++drawCount)
     {
-        engine.drawCard(0);
-        drawCount++;
+        engine.drawCard(turn);
+        engine.nextTurn();
+        turn = engine.getCurrentTurn();
+    }
+
+    int totalInHands = engine.getPlayer(0)->get_size() + engine.getPlayer(1)->get_size();
+    bool hasPhantom = false;
+    for (int p = 0; p < 2; ++p)
+    {
+        const Player * pl = engine.getPlayer(p);
+        for (int i = 0; i < pl->get_size(); ++i)
+        {
+            Card c = pl->peek(i);
+            // Card() is number 0 / Wild; the real deck never contains it.
+            if (c.number == 0 && c.color == CardColor::Wild)
+                hasPhantom = true;
+        }
     }
 
     TEST("P0 successfully drew cards through deck exhaustion", engine.getPlayer(0)->get_size() > 10);
+    TEST("deck exhaustion never creates phantom cards", !hasPhantom);
+    TEST("exhausted deck stops instead of inventing cards", totalInHands <= DECK_SIZE - 1);
     TEST("currentCard remains valid after reshuffle", engine.getCurrentCard().number >= 0);
 }
 
@@ -859,9 +917,25 @@ void testBotAIStrategiesComprehensive()
         self.hand_add(Card(CARD_SKIP, CardColor::Red));
 
         Card current(5, CardColor::Red);
-        int oppSizes[5] = {5, 1};
+        int oppSizes[5] = {1, 5};
         int blockIdx = bot.pickCard(&self, current, 1, 0, oppSizes, 2, 0);
         TEST("HardBot blocks threatening opponent holding 1 card", blockIdx == 1);
+
+        HardBotStrategy bot2;
+        Player self2("Bot", PlayerType::Bot, BotDifficulty::Hard);
+        self2.hand_add(Card(3, CardColor::Red));
+        self2.hand_add(Card(CARD_SKIP, CardColor::Red));
+        int oppSizes2[5] = {5, 1};
+        int blockIdx2 = bot2.pickCard(&self2, current, 1, 1, oppSizes2, 2, 0);
+        TEST("HardBot maps next opponent when self is not index 0", blockIdx2 == 1);
+
+        HardBotStrategy bot3;
+        Player self3("Bot", PlayerType::Bot, BotDifficulty::Hard);
+        self3.hand_add(Card(3, CardColor::Red));
+        self3.hand_add(Card(CARD_SKIP, CardColor::Red));
+        int oppSizes3[5] = {1, 5};
+        int blockIdx3 = bot3.pickCard(&self3, current, -1, 1, oppSizes3, 2, 0);
+        TEST("HardBot maps next opponent in reverse direction", blockIdx3 == 1);
     }
 
     // 3. Bot under Vietnamese rules doesn't play illegal last card
@@ -891,6 +965,78 @@ void testBotAIStrategiesComprehensive()
     }
 }
 
+void testRegressionFixes()
+{
+    GameConfig cfg;
+    cfg.lang = Language::English;
+
+    // Out-of-turn draws are rejected without modifying the hand.
+    {
+        GameEngine engine(cfg, false);
+        engine.init(3);
+        engine.addPlayer("P0", PlayerType::Human, 0);
+        engine.addPlayer("P1", PlayerType::Human, 0);
+        engine.addPlayer("P2", PlayerType::Human, 0);
+        engine.start();
+
+        int current = engine.getCurrentTurn();
+        int other = (current + 1) % 3;
+        int before = engine.getPlayer(other)->get_size();
+        bool drew = engine.drawCard(other);
+        TEST("drawCard rejects an out-of-turn player", !drew);
+        TEST("rejected out-of-turn draw leaves hand unchanged",
+             engine.getPlayer(other)->get_size() == before);
+    }
+
+    // UNO can only be called on your turn with exactly two cards.
+    {
+        GameEngine engine(cfg, false);
+        engine.init(2);
+        engine.addPlayer("P0", PlayerType::Human, 0);
+        engine.addPlayer("P1", PlayerType::Human, 0);
+        engine.start();
+
+        int current = engine.getCurrentTurn();
+        int other = (current + 1) % 2;
+        Player * p = engine.getPlayer(current);
+        while (p->get_size() > 0) p->hand_remove(0);
+        p->hand_add(Card(1, CardColor::Red));
+        p->hand_add(Card(2, CardColor::Red));
+        p->hand_add(Card(3, CardColor::Red));
+
+        TEST("UNO call rejected with three cards", !engine.callUno(current));
+        p->hand_remove(0);
+        TEST("UNO call rejected out of turn", !engine.callUno(other));
+        TEST("UNO call accepted with two cards on turn", engine.callUno(current));
+        TEST("UNO call state is exposed", engine.hasCalledUno(current));
+    }
+
+    // Skip/Reverse must take effect even when it is the player's last card.
+    {
+        GameEngine engine(cfg, false);
+        engine.init(3);
+        engine.addPlayer("P0", PlayerType::Human, 0);
+        engine.addPlayer("P1", PlayerType::Human, 0);
+        engine.addPlayer("P2", PlayerType::Human, 0);
+        engine.start();
+
+        int current = engine.getCurrentTurn();
+        Player * p = engine.getPlayer(current);
+        while (p->get_size() > 0) p->hand_remove(0);
+
+        CardColor color = engine.getCurrentCard().color;
+        if (color == CardColor::Wild)
+            color = CardColor::Red;
+        p->hand_add(Card(CARD_SKIP, color));
+
+        TEST("finishing Skip is a legal play", engine.playCard(current, 0, color));
+        TEST("finishing Skip does not end a three-player game", !engine.isGameOver());
+        engine.nextTurn();
+        TEST("finishing Skip still skips the next player",
+             engine.getCurrentTurn() == (current + 2) % 3);
+    }
+}
+
 int main()
 {
     std::cout << "=== Running Unit Tests ===" << std::endl << std::endl;
@@ -913,6 +1059,7 @@ int main()
     testActionCards();
     testDrawStackingAndForceDraw();
     testVietnameseRulesComprehensive();
+    testRegressionFixes();
 
     std::cout << std::endl << "--- Bot AI Tests ---" << std::endl;
     testBot();

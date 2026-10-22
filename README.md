@@ -1,12 +1,12 @@
 # gameuno — C++ UNO Card Game
 
-A feature-rich UNO card game written in Modern C++17 with Raylib GUI, AI bots, and LAN multiplayer support.
+A feature-rich UNO card game written in Modern C++17 with a Raylib GUI, AI bots, and a Linux LAN backend (not yet exposed in the GUI).
 
 ## Features
 
 - **Full UNO rules**: Skip, Reverse, Draw 2, Wild, Wild Draw 4 with stacking
 - **AI opponents**: 3 difficulty levels (Easy/Medium/Hard) using Strategy pattern
-- **Multiplayer**: Local hot-seat, Human+Bot mixed, LAN (Linux)
+- **Multiplayer**: Local hot-seat, Human+Bot mixed; LAN backend exists for Linux but is not wired to the GUI yet
 - **Vietnamese rules**: Jump-in, Catch UNO, no action/finish cards
 - **Graphics**: Raylib-accelerated 2D with particles, animations, and effects
 - **Network**: epoll-based authoritative server (Linux)
@@ -23,7 +23,7 @@ gameuno/
 │   ├── ui/                 Raylib GUI (game_view, card_renderer, colors)
 │   ├── network/            TCP networking (epoll, packet framing)
 │   └── utils/              Logging, assets, input, audio, particles, animations
-├── tests/test_all.cpp      Unit tests (80+)
+├── tests/test_all.cpp      Unit tests (160 on Windows)
 ├── CMakeLists.txt          CMake build (C++17, FetchContent raylib)
 └── Makefile                Build wrapper
 ```
@@ -95,7 +95,7 @@ make release
 ### Vietnamese Rules (toggle in menu)
 - **Jump-in**: play exact matching card out of turn
 - **Catch UNO**: penalize player who forgets to call UNO (+2 cards)
-- **No action/finish cards**: Draw 2, Wild, Wild Draw 4 cannot end the game
+- **Legal final card**: Draw 2, Wild, and Wild Draw 4 cannot be played as your last card
 
 ## Running Tests
 
@@ -105,7 +105,7 @@ make test
 ./build/test_all
 ```
 
-The test suite covers: Card equality, Deck creation/shuffling, Player hand management, Game engine lifecycle, Bot turn execution, Rules validation, and Wild Draw 4 constraints.
+The Windows suite currently passes 160 tests. Linux additionally compiles the TCP transport-buffer tests. Coverage includes card equality, deck creation/reshuffling and exhaustion, player hands, game-engine lifecycle, bot turns, rules validation, Wild Draw 4 constraints, UNO timing/catches, jump-ins, and terminal action cards.
 
 ## Project Status
 

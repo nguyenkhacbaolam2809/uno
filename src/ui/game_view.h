@@ -49,7 +49,6 @@ public:
     InteractionResult getInteraction();
 
     void showMessage(const std::string & msg, float duration = 2.0f);
-    bool isReady() const noexcept;
 
     void resetInteraction();
 
@@ -63,8 +62,7 @@ private:
     float overlayTimer;
 
     bool unoButtonEnabled;
-    int vulnerableOpponent;
-    int handScrollOffset;
+    std::vector<int> m_catchableOpponents;
 
     void renderBackground();
     void renderOpponents(const GameEngine & engine, int localPlayerId);
@@ -75,12 +73,14 @@ private:
     void renderMessageOverlay();
     void renderUnoButton(const GameEngine & engine, int localPlayerId);
     void renderCatchTargets(const GameEngine & engine, int localPlayerId);
+    void renderJumpInButton(const GameEngine & engine, int localPlayerId);
     void renderWinConfetti(const GameEngine & engine);
     void renderCardGlow(const Card & c, int x, int y, float scale);
 
     void handleHandClick(const GameEngine & engine, int localPlayerId);
     void handleUnoCatchClick(const GameEngine & engine, int localPlayerId);
     int cardAtPos(Vector2 mouse, const GameEngine & engine, int localPlayerId) const;
+    int findJumpInCard(const GameEngine & engine, int localPlayerId) const;
 
     Vector2 getHandCardPos(int index, int total) const;
     Rectangle getCardRect(int index, int total) const;

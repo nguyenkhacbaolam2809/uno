@@ -16,10 +16,10 @@ using uno::WHITE_SMOKE;
 using uno::WILD_BG;
 
 GameView::GameView()
-    : hoveredCard(-1), selectedCard(-1), needsColorPick(false),
-      pickedColor(CardColor::Wild),
-      overlayTimer(0.0f), unoButtonEnabled(false), vulnerableOpponent(-1),
-      handScrollOffset(0)
+    : hoveredCard(-1), selectedCard(-1),
+      pendingResult{PlayerAction::NONE, -1, -1, CardColor::Wild},
+      needsColorPick(false), pickedColor(CardColor::Wild),
+      overlayTimer(0.0f), unoButtonEnabled(false)
 {
 }
 
@@ -48,11 +48,6 @@ void GameView::showMessage(const std::string & msg, float duration)
     overlayTimer = duration;
 }
 
-bool GameView::isReady() const noexcept
-{
-    return true;
-}
-
 void GameView::render(const GameEngine & engine, int localPlayerId)
 {
     renderBackground();
@@ -60,12 +55,18 @@ void GameView::render(const GameEngine & engine, int localPlayerId)
         localPlayerId < 0 || localPlayerId >= engine.getPlayerCount())
         return;
 
+    bool colorPickerWasOpen = needsColorPick;
+
     renderOpponents(engine, localPlayerId);
     renderPiles(engine);
     renderHand(engine, localPlayerId);
     renderTurnIndicator(engine, localPlayerId);
     renderUnoButton(engine, localPlayerId);
     renderCatchTargets(engine, localPlayerId);
+    renderJumpInButton(engine, localPlayerId);
+
+    if (engine.getPhase() == GamePhase::GameOver)
+        renderWinConfetti(engine);
 
     if (needsColorPick)
         renderColorPicker();
@@ -76,10 +77,11 @@ void GameView::render(const GameEngine & engine, int localPlayerId)
     ParticleSystem::instance().update(GetFrameTime());
     ParticleSystem::instance().render();
 
-    AnimationManager::instance().update(GetFrameTime());
-
-    handleHandClick(engine, localPlayerId);
-    handleUnoCatchClick(engine, localPlayerId);
+    if (!colorPickerWasOpen)
+    {
+        handleHandClick(engine, localPlayerId);
+        handleUnoCatchClick(engine, localPlayerId);
+    }
 }
 
 #ifndef _WIN32
@@ -90,6 +92,8 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
     int n = (int)state.players.size();
     if (n <= 0 || localPlayerId < 0 || localPlayerId >= n)
         return;
+
+    bool colorPickerWasOpen = needsColorPick;
 
     int slotW = 180, slotH = 80;
     int gap = 20;
@@ -129,17 +133,29 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
     int handSize = (int)me.hand.size();
     bool isMyTurn = (state.gs.turn % n) == localPlayerId;
     Vector2 m = GetMousePosition();
+
     hoveredCard = -1;
+    if (isMyTurn)
+    {
+        for (int i = handSize - 1; i >= 0; i--)
+        {
+            Vector2 pos = getHandCardPos(i, handSize);
+            Rectangle cardHit = { pos.x, pos.y, (float)CARD_WIDTH, (float)CARD_HEIGHT };
+            if (CheckCollisionPointRec(m, cardHit))
+            {
+                hoveredCard = i;
+                break;
+            }
+        }
+    }
 
     for (int i = 0; i < handSize; i++)
     {
         Vector2 pos = getHandCardPos(i, handSize);
-        Rectangle cardHit = { pos.x, pos.y, (float)CARD_WIDTH, (float)CARD_HEIGHT };
-        float lift = (isMyTurn && CheckCollisionPointRec(m, cardHit)) ? 20.0f : 0.0f;
+        float lift = (i == hoveredCard) ? 20.0f : 0.0f;
 
-        if (lift > 0 && isMyTurn)
+        if (i == hoveredCard)
         {
-            hoveredCard = i;
             Rectangle glowRect = { pos.x - 2, pos.y - 2 - lift,
                                    (float)CARD_WIDTH + 4, (float)CARD_HEIGHT + 4 + lift };
             DrawRectangleRounded(glowRect, 0.3f, 10, Fade(GOLD_COLOR, 0.4f));
@@ -149,17 +165,18 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
     }
 
     // UNO button
-    unoButtonEnabled = (isMyTurn && handSize == 2);
+    unoButtonEnabled = (!needsColorPick && isMyTurn && handSize == 2);
     if (unoButtonEnabled)
     {
-        Rectangle ubtn = { (float)(SCREEN_W / 2 + 60), (float)(SCREEN_H - 80), 100, 40 };
+        Rectangle ubtn = { (float)(SCREEN_W / 2 + 140), (float)(SCREEN_H - CARD_HEIGHT - 100), 100, 40 };
         Color unoRed = { 237, 28, 36, 255 };
         Color ucol = unoRed;
         if (CheckCollisionPointRec(m, ubtn)) ucol = Fade(ucol, 0.7f);
         DrawRectangleRounded(ubtn, 0.3f, 10, ucol);
         DrawRectangleRoundedLines(ubtn, 0.3f, 10, 2, GOLD_COLOR);
         int tw3 = MeasureText("UNO!", 22);
-        DrawText("UNO!", (SCREEN_W - tw3) / 2, SCREEN_H - 74, 22, GOLD_COLOR);
+        DrawText("UNO!", (int)(ubtn.x + (ubtn.width - tw3) / 2),
+                 (int)(ubtn.y + (ubtn.height - 22) / 2), 22, GOLD_COLOR);
 
         if (CheckCollisionPointRec(m, ubtn) && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
         {
@@ -168,24 +185,24 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
         }
     }
 
-    // Catch targets
-    vulnerableOpponent = -1;
-    for (int i = 0; i < n; i++)
+    // Catch targets (LAN sync has no UNO-called flag, so every 1-card
+    // opponent is shown; the server still validates the accusation).
+    m_catchableOpponents.clear();
+    if (state.gs.vietRules)
     {
-        if (i == localPlayerId) continue;
-        if ((int)state.players[i].hand.size() == 1)
-        {
-            vulnerableOpponent = i;
-            break;
-        }
+        for (int i = 0; i < n; i++)
+            if (i != localPlayerId && (int)state.players[i].hand.size() == 1)
+                m_catchableOpponents.push_back(i);
     }
-    if (vulnerableOpponent >= 0)
+
+    if (!m_catchableOpponents.empty())
     {
         oppIdx = 0;
         for (int i = 0; i < n; i++)
         {
             if (i == localPlayerId) continue;
-            if (i == vulnerableOpponent)
+            if (std::find(m_catchableOpponents.begin(), m_catchableOpponents.end(), i) !=
+                m_catchableOpponents.end())
             {
                 int sx = startX + oppIdx * (slotW + gap);
                 Rectangle cr = { (float)sx, 110, (float)slotW, 30 };
@@ -198,9 +215,9 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
         }
     }
 
-    if (isMyTurn)
+    if (isMyTurn && !needsColorPick)
     {
-        Rectangle btn = { (float)(SCREEN_W - 180), (float)(SCREEN_H - 75), 140, 40 };
+        Rectangle btn = { (float)(SCREEN_W - 180), (float)(SCREEN_H - CARD_HEIGHT - 100), 140, 40 };
         Color drawBtnHover = { 200, 180, 0, 255 };
         Color drawBtnNormal = { 180, 140, 20, 255 };
         if (CheckCollisionPointRec(m, btn))
@@ -223,20 +240,19 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
     ParticleSystem::instance().update(GetFrameTime());
     ParticleSystem::instance().render();
 
-    AnimationManager::instance().update(GetFrameTime());
-
-    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+    if (!colorPickerWasOpen && IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
     {
-        if (vulnerableOpponent >= 0)
+        if (!m_catchableOpponents.empty())
         {
             oppIdx = 0;
             for (int i = 0; i < n; i++)
             {
                 if (i == localPlayerId) continue;
-                if (i == vulnerableOpponent)
+                if (std::find(m_catchableOpponents.begin(), m_catchableOpponents.end(), i) !=
+                    m_catchableOpponents.end())
                 {
                     int sx = startX + oppIdx * (slotW + gap);
-                    Rectangle cr = { (float)sx, 20, (float)slotW, (float)slotH };
+                    Rectangle cr = { (float)sx, 20, (float)slotW, 120 };
                     if (CheckCollisionPointRec(m, cr))
                     {
                         pendingResult.action = PlayerAction::CATCH_UNO;
@@ -250,7 +266,7 @@ void GameView::renderSync(const SyncState & state, int localPlayerId)
 
         if (isMyTurn)
         {
-            for (int i = 0; i < handSize; i++)
+            for (int i = handSize - 1; i >= 0; i--)
             {
                 Vector2 pos = getHandCardPos(i, handSize);
                 Rectangle cardArea = { pos.x, pos.y, (float)CARD_WIDTH, (float)CARD_HEIGHT };

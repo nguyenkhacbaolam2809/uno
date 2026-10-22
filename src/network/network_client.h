@@ -39,7 +39,7 @@ public:
     bool receiveSyncState(SyncState & state, int timeoutMs = 100);
     bool sendPlayCard(int cardIdx, unsigned char chosenColor, int playerId);
     bool sendDraw(int playerId);
-    bool sendJumpIn(int cardIdx, int playerId);
+    bool sendJumpIn(int cardIdx, int playerId, unsigned char chosenColor = 0);
     bool sendCallUno(int playerId);
     bool sendCatchUno(int targetId, int playerId);
 

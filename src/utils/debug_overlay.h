@@ -5,6 +5,8 @@
 #include <string>
 #include <functional>
 #include <deque>
+#include <vector>
+#include <utility>
 
 class DebugOverlay {
 public:

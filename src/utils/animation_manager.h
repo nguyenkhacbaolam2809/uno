@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <memory>
 #include <functional>
+#include <vector>
 
 enum class EaseType {
     LINEAR,
@@ -32,7 +33,7 @@ public:
     virtual void update(float dt) = 0;
     virtual bool isFinished() const noexcept = 0;
     virtual AnimState state() const noexcept { return m_state; }
-    virtual void reset() { m_state = AnimState::PENDING; m_elapsed = 0; }
+    virtual void reset() { m_state = AnimState::RUNNING; m_elapsed = 0; }
 
 protected:
     AnimState m_state{AnimState::PENDING};

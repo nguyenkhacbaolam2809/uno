@@ -41,7 +41,16 @@ private:
     MenuResult m_result;
 };
 
+enum class GameMode {
+    Single,
+    Local,
+    Mixed,
+    LanHost,
+    LanClient
+};
+
 struct LobbyConfig {
+    GameMode mode{GameMode::Single};
     int numHumans{1};
     int numBots{1};
     int botDifficulty{1};
@@ -54,8 +63,8 @@ struct LobbyConfig {
 };
 
 struct GameOverInfo {
-    int winner;
-    int localPlayerId;
+    int winner{-1};
+    int localPlayerId{-1};
     std::vector<std::string> playerNames;
 };
 
@@ -76,8 +85,16 @@ private:
     std::unique_ptr<GameView> m_gameView;
     int m_localPlayerId{0};
     bool m_entered{false};
+    double m_botTimer{-1.0};
+    bool m_jumpWindow{false};
+    double m_jumpDeadline{0.0};
+    double m_jumpBotAt{0.0};
 
     void processTurnLocal();
+    void advanceAfterPlay();
+    bool hasJumpCandidate() const;
+    void beginJumpWindow();
+    void updateJumpWindow();
 };
 
 class GameOverState : public IAppState {
@@ -101,7 +118,6 @@ public:
 private:
     GameConfig m_config;
     LobbyConfig m_lobby;
-    float m_timer{0};
 };
 
 class AppStateMachine {

@@ -135,7 +135,7 @@ static void renderState(const GameEngine & engine, int localPlayerId)
         for (int i = 0; i < me->get_size(); i++)
         {
             Card c = me->peek(i);
-            bool playable = canPlayCard(c, current);
+            bool playable = engine.validatePlay(localPlayerId, i);
             std::cout << "  ";
             printCard(c, true, i);
             if (playable)
@@ -196,7 +196,7 @@ int runConsoleMode(const GameConfig & cfg)
     std::getline(std::cin, input);
     vietRules = (input == "y" || input == "Y");
 
-    int total = std::max(numHumans + numBots, 2);
+    int total = std::max(2, std::min(MAX_PLAYERS, numHumans + numBots));
     int localPlayerId = 0;
 
     GameEngine engine(cfg, vietRules);
@@ -232,6 +232,10 @@ int runConsoleMode(const GameConfig & cfg)
         int n = engine.getPlayerCount();
         int currentTurn = engine.getCurrentTurn() % n;
         const Player * p = engine.getPlayer(currentTurn);
+
+        // Console mode is hot-seat: the active human is always "you".
+        if (!p->isBot())
+            localPlayerId = currentTurn;
 
         renderState(engine, localPlayerId);
 
@@ -308,8 +312,10 @@ int runConsoleMode(const GameConfig & cfg)
                 }
                 if (cmd == "u")
                 {
-                    engine.callUno(localPlayerId);
-                    std::cout << "UNO called!" << std::endl;
+                    if (engine.callUno(localPlayerId))
+                        std::cout << "UNO called!" << std::endl;
+                    else
+                        std::cout << "You can only call UNO on your turn with exactly two cards." << std::endl;
                     continue;
                 }
 

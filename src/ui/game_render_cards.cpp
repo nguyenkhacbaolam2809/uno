@@ -20,31 +20,22 @@ void GameView::renderHand(const GameEngine & engine, int localPlayerId)
     if (handSize == 0) return;
 
     bool isMyTurn = (engine.getCurrentTurn() % engine.getPlayerCount()) == localPlayerId;
-    Vector2 m = GetMousePosition();
-    hoveredCard = -1;
+
+    // Cards overlap and later cards are drawn on top of earlier ones. Use the
+    // same top-most hit-test as the click handler so hovering and clicking
+    // always refer to the card the player can actually see.
+    hoveredCard = isMyTurn ? cardAtPos(GetMousePosition(), engine, localPlayerId) : -1;
 
     for (int i = 0; i < handSize; i++)
     {
         Vector2 pos = getHandCardPos(i, handSize);
-        Rectangle r = { pos.x, pos.y, (float)CARD_WIDTH, (float)CARD_HEIGHT };
-
-        bool hov = CheckCollisionPointRec(m, r);
-        float lift = 0.0f;
-
-        if (isMyTurn && hov)
-        {
-            lift = 20.0f;
-            hoveredCard = i;
-        }
-
-        if (hov && isMyTurn)
-        {
-            Rectangle glowRect = { pos.x - 2, pos.y - 2, (float)CARD_WIDTH + 4,
-                                   (float)CARD_HEIGHT + 4 + lift };
-            DrawRectangleRounded(glowRect, 0.3f, 10, Fade(GOLD_COLOR, 0.4f));
-        }
+        float lift = (i == hoveredCard) ? 20.0f : 0.0f;
 
         Card c = p->peek(i);
+
+        if (i == hoveredCard)
+            renderCardGlow(c, (int)pos.x, (int)(pos.y - lift), 1.0f);
+
         card_renderer::drawCard(c, (int)pos.x, (int)(pos.y - lift), 1.0f);
     }
 }
@@ -72,7 +63,8 @@ int GameView::cardAtPos(Vector2 mouse, const GameEngine & engine, int localPlaye
 
     const Player * p = engine.getPlayer(localPlayerId);
     int handSize = p->get_size();
-    for (int i = 0; i < handSize; i++)
+    // Later cards are drawn on top of earlier ones, so test from right to left.
+    for (int i = handSize - 1; i >= 0; i--)
     {
         Rectangle r = getCardRect(i, handSize);
         if (CheckCollisionPointRec(mouse, r))

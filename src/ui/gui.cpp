@@ -2,6 +2,7 @@
 #include "game_state.h"
 #include "logger.h"
 #include "audio_manager.h"
+#include "asset_manager.h"
 #include "colors.h"
 #include <cstdlib>
 
@@ -19,6 +20,9 @@ Gui::Gui(const GameConfig & cfg) : config(cfg)
 
 Gui::~Gui()
 {
+    // Release GPU/audio resources while the raylib context is still valid.
+    AssetManager::instance().unloadAll();
+    AudioManager::instance().shutdown();
     CloseWindow();
 }
 

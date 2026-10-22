@@ -95,12 +95,21 @@ void AssetManager::unloadTexture(const std::string & path)
 
 void AssetManager::unloadFont(const std::string & path)
 {
-    auto it = m_fonts.find(path);
-    if (it == m_fonts.end()) return;
-    if (--it->second.refCount <= 0)
+    // Fonts are stored as "<path>@<size>" so one path can be loaded at
+    // multiple sizes. Unloading a path must find every stored size.
+    const std::string prefix = path + "@";
+    for (auto it = m_fonts.begin(); it != m_fonts.end(); )
     {
-        ::UnloadFont(it->second.font);
-        m_fonts.erase(it);
+        if (it->first == path || it->first.rfind(prefix, 0) == 0)
+        {
+            if (--it->second.refCount <= 0)
+            {
+                ::UnloadFont(it->second.font);
+                it = m_fonts.erase(it);
+                continue;
+            }
+        }
+        ++it;
     }
 }
 
@@ -134,8 +143,11 @@ Texture2D * AssetManager::getTexture(const std::string & path)
 
 Font * AssetManager::getFont(const std::string & path)
 {
-    auto it = m_fonts.find(path);
-    return it != m_fonts.end() ? &it->second.font : nullptr;
+    const std::string prefix = path + "@";
+    for (auto & kv : m_fonts)
+        if (kv.first == path || kv.first.rfind(prefix, 0) == 0)
+            return &kv.second.font;
+    return nullptr;
 }
 
 Sound * AssetManager::getSound(const std::string & path)
@@ -157,7 +169,11 @@ bool AssetManager::hasTexture(const std::string & path) const
 
 bool AssetManager::hasFont(const std::string & path) const
 {
-    return m_fonts.find(path) != m_fonts.end();
+    const std::string prefix = path + "@";
+    for (const auto & kv : m_fonts)
+        if (kv.first == path || kv.first.rfind(prefix, 0) == 0)
+            return true;
+    return false;
 }
 
 void AssetManager::preloadCommon()

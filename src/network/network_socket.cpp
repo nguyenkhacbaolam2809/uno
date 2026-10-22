@@ -160,7 +160,8 @@ int TcpSocket::send(const char * data, int len)
 #ifdef _WIN32
     return ::send(m_fd, data, len, 0);
 #else
-    return (int)::write(m_fd, data, len);
+    // A peer that closes mid-send must not terminate the process with SIGPIPE.
+    return (int)::send(m_fd, data, len, MSG_NOSIGNAL);
 #endif
 }
 
@@ -260,6 +261,9 @@ bool TcpListener::setReuseAddr()
 SocketPoller::SocketPoller()
 {
 #ifdef _WIN32
+    FD_ZERO(&m_readSet);
+    FD_ZERO(&m_writeSet);
+    FD_ZERO(&m_errSet);
     m_count = 0;
 #else
     m_epollFd = epoll_create1(0);
@@ -276,10 +280,14 @@ SocketPoller::~SocketPoller()
 bool SocketPoller::add(socket_t fd, bool wantRead, bool wantWrite)
 {
 #ifdef _WIN32
-    FD_SET(fd, &m_readSet);
+    FD_CLR(fd, &m_readSet);
+    FD_CLR(fd, &m_writeSet);
+    FD_CLR(fd, &m_errSet);
+    if (wantRead) FD_SET(fd, &m_readSet);
     if (wantWrite) FD_SET(fd, &m_writeSet);
     FD_SET(fd, &m_errSet);
-    m_maxFd = (fd > m_maxFd) ? fd : m_maxFd;
+    if (m_count == 0 || fd > m_maxFd)
+        m_maxFd = fd;
     m_count++;
     return true;
 #else
@@ -297,7 +305,13 @@ bool SocketPoller::add(socket_t fd, bool wantRead, bool wantWrite)
 bool SocketPoller::modify(socket_t fd, bool wantRead, bool wantWrite)
 {
 #ifdef _WIN32
-    (void)fd; (void)wantRead; (void)wantWrite;
+    FD_CLR(fd, &m_readSet);
+    FD_CLR(fd, &m_writeSet);
+    if (wantRead) FD_SET(fd, &m_readSet);
+    if (wantWrite) FD_SET(fd, &m_writeSet);
+    FD_SET(fd, &m_errSet);
+    if (fd > m_maxFd)
+        m_maxFd = fd;
     return true;
 #else
     struct epoll_event ev;
@@ -315,7 +329,8 @@ bool SocketPoller::remove(socket_t fd)
     FD_CLR(fd, &m_readSet);
     FD_CLR(fd, &m_writeSet);
     FD_CLR(fd, &m_errSet);
-    m_count--;
+    if (m_count > 0)
+        m_count--;
     return true;
 #else
     return epoll_ctl(m_epollFd, EPOLL_CTL_DEL, fd, nullptr) == 0;
